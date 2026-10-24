@@ -1,0 +1,63 @@
+defaults:
+  origins: [TPE]             # TPE 桃園；松山（TSA）只在有直飛的目的地個別加上
+  search_from_days: 30
+  search_to_days: 210
+  depart_weekdays: []        # 留空 = 每天都可以出發（0 = 週一 … 6 = 週日）
+  allow_mixed_origins: true  # 單程配對時，允許桃園去、松山回
+
+scan:
+  strategy: per_date         # per_date：逐日查詢；calendar：日期價格 API（實驗性，目前會被 Google 擋）
+  per_date_tiers:            # 逐日查詢的分層頻率：距今 N 天內，每 every 天查一次
+    - {until_days: 60, every: 1}
+    - {until_days: 120, every: 3}
+    - {until_days: 217, every: 10}
+  detail_budget: 40          # 每次執行最多幾次明細查詢
+  # 以下只在 strategy: calendar 時使用
+  calendar_max_days: 180     # 日期 API 單次最多涵蓋的天數
+  fallback_to_per_date: true # 日期 API 失敗時，該航線改用逐日查詢
+  verify_samples: 4          # 每次另外隨機抽幾個日期，比對日期 API 和明細查詢的價格
+
+runner:
+  concurrency: 2
+  delay_seconds: [2, 5]      # 每次查詢後隨機等待的秒數範圍
+  retries: 2
+  abort_after_consecutive_failures: 20
+
+alerts:
+  max_price: null            # 先不設；之後可改成 {default: N, by_month: {12: N, ...}}
+  use_google_price_level: true
+  below_median_pct: 15
+  notify_new_low: true
+  warmup_days: 7
+  renotify_drop: 300         # 同一組日期要再便宜 TWD 300 以上才重新通知
+
+weekly_summary:
+  enabled: true
+  weekday: 0                 # 週一
+  hour: 9                    # 台灣時間
+
+health:
+  max_failure_rate: 0.30
+  max_days_without_success: 3
+
+groups:
+  short_haul:
+    mode: one_way
+    max_stops: 0
+    trip_length_days: [5, 7]
+    destinations:
+      - code: CTS            # 北海道・札幌（新千歲）
+      - code: SDJ            # 宮城・仙台
+      - code: NRT            # 東京・成田
+      - code: HND            # 東京・羽田
+        origins: [TPE, TSA]  # 松山只有飛羽田有直飛
+
+  long_haul:
+    mode: round_trip
+    origins: [TPE]
+    max_stops: 1
+    max_total_duration_h: 24
+    max_layover_h: 6
+    min_layover_min: 75
+    trip_length_days: [10, 14]
+    destinations: []

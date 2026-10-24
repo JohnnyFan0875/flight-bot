@@ -1,0 +1,35 @@
+name: weekly
+
+on:
+  schedule:
+    - cron: "0 1 * * 1" # 台灣時間週一 09:00
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只印出結果，不發送 Discord、不上傳 R2"
+        type: boolean
+        default: false
+
+concurrency:
+  group: flight-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --no-dev
+      - name: flight-bot weekly
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET || 'flight-bot' }}
+        run: uv run flight-bot run --mode weekly ${{ inputs.dry_run && '--dry-run' || '' }}

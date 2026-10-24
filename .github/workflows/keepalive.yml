@@ -1,0 +1,23 @@
+name: keepalive
+
+# 公開 repo 連續 60 天沒有活動時，排程 workflow 會被自動停用
+on:
+  schedule:
+    - cron: "0 0 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u +%Y-%m-%dT%H:%M:%SZ > .github/heartbeat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/heartbeat
+          git commit -m "chore: keepalive heartbeat"
+          git push

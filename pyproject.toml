@@ -1,0 +1,38 @@
+[project]
+name = "flight-bot"
+version = "0.1.0"
+description = "Google Flights 票價監控，透過 Discord 通知便宜機票"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fast-flights>=3.1,<4",
+    "primp>=0.15",
+    "selectolax>=0.3",
+    "typing-extensions>=4.12",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+    "pyarrow>=18",
+    "boto3>=1.35",
+    "requests>=2.32",
+    "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+analysis = ["duckdb>=1.1"]
+
+[project.scripts]
+flight-bot = "flight_bot.main:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flight_bot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
