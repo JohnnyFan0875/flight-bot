@@ -13,6 +13,7 @@ class Backend(Protocol):
     def get(self, key: str) -> bytes | None: ...
     def put(self, key: str, data: bytes, content_type: str = "application/octet-stream") -> None: ...
     def copy(self, src: str, dst: str) -> bool: ...
+    def list(self, prefix: str) -> list[str]: ...
 
 
 class LocalBackend:
@@ -38,6 +39,14 @@ class LocalBackend:
             return False
         self.put(dst, data)
         return True
+
+    def list(self, prefix):
+        base = self._path(prefix)
+        folder = base if base.is_dir() else base.parent
+        if not folder.exists():
+            return []
+        keys = [str(p.relative_to(self.root)) for p in folder.rglob("*") if p.is_file()]
+        return sorted(k for k in keys if k.startswith(prefix))
 
 
 class R2Backend:
@@ -74,6 +83,10 @@ class R2Backend:
                 return False
             raise
         return True
+
+    def list(self, prefix):
+        pages = self._s3.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix)
+        return sorted(o["Key"] for page in pages for o in page.get("Contents", []))
 
 
 def from_env() -> Backend:

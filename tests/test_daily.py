@@ -5,200 +5,186 @@ import pytest
 from flight_bot.daily import Daily
 from flight_bot.notify import weekly
 from flight_bot.notify.discord import Discord, batches
-from flight_bot.providers.base import CalendarQuote, Flight, ProviderError, SearchResult, Segment
+from flight_bot.providers.base import Flight, ProviderError, SearchResult, Segment
 from flight_bot.runner import Runner
 from flight_bot.storage.backend import LocalBackend
 from flight_bot.storage.raw import RawWriter
 from flight_bot.storage.state import State
 
-from .conftest import make_config
+from .conftest import make_config, route
 
 TODAY = date(2026, 10, 24)
+ROUTE = "東京"
 
 
 class FakeProvider:
-    """去程 3000、回程 3500；cheap_day 那天去程特價。"""
+    """去程 07:10 3000、09:30 3400；回程 3500；cheap_day 那天去程特價；松山沒有航班。"""
 
-    def __init__(self, cheap_day: date | None = None, calendar_fails: bool = False, level: str = "typical"):
+    def __init__(self, cheap_day: date | None = None, level: str = "typical", typical=(2000, 5000)):
         self.cheap_day = cheap_day
-        self.calendar_fails = calendar_fails
         self.level = level
-        self.calls = {"calendar": 0, "search": 0}
+        self.typical = typical
+        self.calls = 0
 
-    def _price(self, origin, d):
-        if origin == "TPE":
-            return 1500 if d == self.cheap_day else 3000
-        if origin == "NRT":
-            return 3500
-        return None  # 松山沒有航班
-
-    def calendar(self, origin, dest, start, end, max_stops, trip_length=None):
-        self.calls["calendar"] += 1
-        if self.calendar_fails:
-            raise ProviderError("壞掉了")
-        out = []
-        d = start
-        while d <= end:
-            price = self._price(origin, d) if "TSA" not in (origin, dest) else None
-            out.append(CalendarQuote(d, None, price))
-            d += timedelta(days=1)
-        return out
+    @staticmethod
+    def _flight(origin, dest, d, hh, mm, price, no="200"):
+        seg = Segment("IT", no, origin, dest, datetime(d.year, d.month, d.day, hh, mm),
+                      datetime(d.year, d.month, d.day, hh + 4, mm), 240)
+        return Flight(["IT"], [seg], 0, 240, [], price)
 
     def search(self, origin, dest, depart, ret, max_stops):
-        self.calls["search"] += 1
-        price = self._price(origin, depart) if "TSA" not in (origin, dest) else None
-        if price is None:
+        self.calls += 1
+        if "TSA" in (origin, dest):
             return SearchResult()
-        seg = Segment("IT", "200", origin, dest, datetime(depart.year, depart.month, depart.day, 7, 10),
-                      datetime(depart.year, depart.month, depart.day, 11, 30), 200)
-        return SearchResult([Flight(["IT"], [seg], 0, 200, [], price)], self.level, (2000, 5000))
+        if origin == "TPE":
+            cheap = 1500 if depart == self.cheap_day else 3000
+            flights = [self._flight(origin, dest, depart, 7, 10, cheap), self._flight(origin, dest, depart, 9, 30, 3400, "202")]
+        else:
+            flights = [self._flight(origin, dest, depart, 15, 0, 3500, "201")]
+        return SearchResult(flights, self.level, self.typical)
 
 
-def make_daily(provider, state, discord, today=TODAY, **cfg):
+def make_daily(provider, state, discord=None, today=TODAY, **cfg):
     config = make_config(**cfg)
-    return Daily(config, provider, state, RawWriter("r1", today), discord, Runner(config.runner, sleep=lambda s: None),
-                 today, "r1", seed=1)
+    return Daily(config, provider, state, RawWriter("r1", today), discord or Discord(dry_run=True),
+                 Runner(config.runner, sleep=lambda s: None), today, "r1", seed=1)
 
 
-def seed_history(state, price=6500, days=10):
-    # 每個出發日都有一筆過去的歷史價格，讓 warmup 結束
+def seed_history(state, price=3000, days=10, route_id=ROUTE):
+    # 每個日期都有過去的歷史價格，讓 warmup 結束
     for n in range(1, days + 1):
-        run = TODAY - timedelta(days=n)
         rows = []
-        for k in range(30, 211):
-            d = TODAY + timedelta(days=k)
-            rows.append(("NRT", "one_way", d, d + timedelta(days=5), "TPE", price))
-        state.add_history(run, rows)
+        for k in range(130):
+            d = date(2026, 11, 1) + timedelta(days=k)
+            rows += [(route_id, "TPE", "NRT", d, price), (route_id, "NRT", "TPE", d, 3500)]
+        state.add_history(TODAY - timedelta(days=n), rows)
 
 
-def test_first_run_collects_without_alerting_on_median():
+def test_first_run_collects_all_flights_without_alerting():
     provider = FakeProvider()
     state = State()
-    discord = Discord(dry_run=True)
-    report = make_daily(provider, state, discord).run()
-    assert provider.calls["calendar"] == 8
-    assert report.calendar_failed == 0
-    assert report.combos > 0
-    assert report.alerts == []  # warmup 期間，價格等級也只是 typical
-    assert state.history_start("NRT", "one_way") == TODAY
+    report = make_daily(provider, state).run()
+    out = [leg for leg in report.legs if leg.outbound]
+    assert out and all(len(leg.flights) == 2 for leg in out)  # 同一天的航班全部保留
+    assert [f.price for f in out[0].flights] == [3000, 3400]
+    assert not any(leg.origin == "TSA" or leg.dest == "TSA" for leg in report.legs)  # 沒有航班的日期不列
+    assert report.hits == []  # warmup 期間，也沒有低於 Google 典型區間
+    assert state.history_start(ROUTE) == TODAY
+    assert all(f.status == "new" for leg in report.legs for f in leg.flights)
 
 
-def test_cheap_day_triggers_alert_with_details():
-    cheap = TODAY + timedelta(days=45)
-    provider = FakeProvider(cheap_day=cheap)
+def test_cheap_day_triggers_on_one_way_price():
+    cheap = date(2026, 12, 8)
     state = State()
     seed_history(state)
     discord = Discord(dry_run=True)
-    report = make_daily(provider, state, discord).run()
+    report = make_daily(FakeProvider(cheap_day=cheap), state, discord).run()
 
-    [alert] = [a for a in report.alerts if a.combo.depart == cheap]
-    assert alert.price == 1500 + 3500
-    assert "new_low" in alert.evaluation.triggers and "below_median" in alert.evaluation.triggers
-    assert alert.out_flight is not None and alert.out_flight.flight_nos == ["IT200"]
-    assert report.detail_tasks <= 40
-    embeds = [e for m in discord.sent for e in m["payload"]["embeds"]]
-    assert any("TWD 5,000" in e["description"] and "IT200" in e["description"] for e in embeds)
+    hits = [(leg, f) for leg, f in report.hits]
+    assert {leg.day for leg, _ in hits} == {cheap}
+    [(leg, f)] = hits
+    assert leg.outbound and f.price == 1500
+    assert f.evaluation.triggers == ["new_low", "below_median", "google_low"]
+    assert leg.flights[1].price == 3400 and not leg.flights[1].evaluation.hit  # 同一天較貴的班次不算
+    [summary] = [e for m in discord.sent for e in m["payload"]["embeds"]]
+    assert summary["title"].startswith("每日報告")
+    assert "**東京**" in summary["description"]
+    assert "去程 TWD 1,500 起" in summary["description"] and "符合 1 班" in summary["description"]
 
-    # 同一天再跑一次：不會重複通知，也不會重複查明細
-    discord2 = Discord(dry_run=True)
-    before = provider.calls["search"]
-    report2 = make_daily(provider, state, discord2).run()
-    assert not [a for a in report2.alerts if a.combo.depart == cheap]
-    assert provider.calls["search"] - before <= 4  # 只有驗證抽樣
+    # 隔天價格不變：狀態是持平
+    report2 = make_daily(FakeProvider(cheap_day=cheap), state, today=TODAY + timedelta(days=1)).run()
+    [(_, f2)] = [(leg, f) for leg, f in report2.hits if leg.day == cheap]
+    assert f2.status == "same" and f2.prev_price == 1500
 
 
-def test_google_low_alert_without_history():
-    provider = FakeProvider(level="low")
+def test_price_drop_shows_status():
+    cheap = date(2026, 12, 8)
     state = State()
-    discord = Discord(dry_run=True)
-    report = make_daily(provider, state, discord, scan={"strategy": "calendar", "detail_budget": 4}).run()
-    assert report.alerts
-    assert all(a.evaluation.triggers == ["google_low"] for a in report.alerts)
-    assert len(report.alerts) == 2  # 預算 4 次 = 2 組單程組合
+    make_daily(FakeProvider(), state).run()
+    report = make_daily(FakeProvider(cheap_day=cheap), state, today=TODAY + timedelta(days=1)).run()
+    leg = next(x for x in report.legs if x.day == cheap and x.outbound)
+    assert leg.cheapest.status == "down" and leg.cheapest.prev_price == 3000
 
 
-def test_calendar_failure_falls_back_to_per_date_and_warns():
-    provider = FakeProvider(calendar_fails=True)
+def test_google_low_without_history():
+    report = make_daily(FakeProvider(typical=(3200, 6000)), State()).run()
+    assert report.hits
+    assert all(leg.outbound and f.price == 3000 for leg, f in report.hits)
+    assert all(f.evaluation.triggers == ["google_low"] for _, f in report.hits)
+
+
+def test_time_window_filters_flights():
+    cfg = {"destinations": [route(origins=["TPE"], outbound_time="09:00-14:00", return_time="06:00-12:00")]}
+    report = make_daily(FakeProvider(), State(), **cfg).run()
+    out = [leg for leg in report.legs if leg.outbound]
+    assert out and all([f.flight.flight_nos for f in leg.flights] == [["IT202"]] for leg in out)
+    assert not [leg for leg in report.legs if not leg.outbound]  # 回程 15:00 不在時段內
+
+
+def test_shared_pair_queried_once_but_listed_per_route():
+    cfg = {"destinations": [route(name="a", origins=["TPE"], trip_days=[5]), route(name="b", origins=["TPE"], trip_days=[6])]}
+    provider = FakeProvider()
+    daily = make_daily(provider, State(), **cfg)
+    report = daily.run()
+    assert provider.calls == report.scan_tasks
+    days = {leg.route.name: {x.day for x in report.legs if x.route.name == leg.route.name and x.outbound} for leg in report.legs}
+    assert days["a"] == days["b"]
+
+
+def test_failed_query_keeps_previous_price_for_two_days():
     state = State()
-    discord = Discord(dry_run=True)
-    report = make_daily(provider, state, discord, runner={"delay_seconds": [0, 0], "retries": 0,
-                                                          "abort_after_consecutive_failures": 100}).run()
-    assert report.calendar_failed == 8
-    assert report.fallback_tasks > 100
-    assert report.combos > 0
-    assert any("日期價格 API 全部失敗" in w for w in report.warnings)
-    assert any("flight-bot 異常" in (m["payload"].get("content") or "") for m in discord.sent)
-
-
-def test_calendar_failure_does_not_abort_and_probes_once():
-    provider = FakeProvider(calendar_fails=True)
-    state = State()
-    daily = make_daily(provider, state, Discord(dry_run=True),
+    make_daily(FakeProvider(), state).run()
+    # 之後兩天查詢全部失敗：沿用之前的價格，但 queried_at 太舊就不再列出
+    state.db.execute("UPDATE searches SET queried_at = '2000-01-01T00:00:00+00:00'")
+    daily = make_daily(AllBroken(), state, today=TODAY + timedelta(days=1),
                        runner={"delay_seconds": [0, 0], "retries": 0, "abort_after_consecutive_failures": 3})
-    report = daily.run()
-    assert provider.calls["calendar"] == 1  # 第一次就失敗，剩下的不再打
-    assert not daily.runner.stats.aborted
-    assert report.fallback_tasks > 100
-    assert report.combos > 0
-
-
-class FlakyCalendar(FakeProvider):
-    """日期 API 前 2 次成功，之後全部失敗。"""
-
-    def calendar(self, *args, **kwargs):
-        if self.calls["calendar"] >= 2:
-            self.calls["calendar"] += 1
-            raise ProviderError("壞掉了")
-        return super().calendar(*args, **kwargs)
-
-
-def test_calendar_gives_up_after_three_failures():
-    provider = FlakyCalendar()
-    daily = make_daily(provider, State(), Discord(dry_run=True),
-                       runner={"delay_seconds": [0, 0], "retries": 0, "concurrency": 1})
-    report = daily.run()
-    assert provider.calls["calendar"] == 5  # 2 次成功 + 3 次失敗後放棄
-    assert report.calendar_failed == 6
-    assert report.fallback_tasks > 0
+    daily.run()
+    assert daily.report.legs == []
 
 
 class AllBroken(FakeProvider):
     def search(self, *args, **kwargs):
-        self.calls["search"] += 1
+        self.calls += 1
         raise ProviderError("被擋了")
 
 
 def test_abort_after_consecutive_failures():
-    provider = AllBroken(calendar_fails=True)
-    daily = make_daily(provider, State(), Discord(dry_run=True),
-                       runner={"delay_seconds": [0, 0], "retries": 0,
-                               "abort_after_consecutive_failures": 5, "concurrency": 1})
+    provider = AllBroken()
+    daily = make_daily(provider, State(), runner={"delay_seconds": [0, 0], "retries": 0,
+                                                  "abort_after_consecutive_failures": 5, "concurrency": 1})
     report = daily.run()
     assert daily.runner.stats.aborted
-    assert provider.calls["search"] == 5
+    assert provider.calls == 5
     assert any("提前結束" in w for w in report.warnings)
+    assert any("flight-bot 異常" in (m["payload"].get("content") or "") for m in daily.discord.sent)
 
 
 def test_raw_parquet_written(tmp_path):
-    provider = FakeProvider()
-    state = State()
-    daily = make_daily(provider, state, Discord(dry_run=True))
+    daily = make_daily(FakeProvider(), State())
     daily.run()
     keys = daily.raw.flush(LocalBackend(tmp_path))
-    assert any("kind=calendar" in k for k in keys)
-    assert any("kind=flights" in k for k in keys)
+    assert keys and all("kind=flights" in k for k in keys)
     import pyarrow.parquet as pq
-    table = pq.read_table(tmp_path / keys[0])
-    assert table.num_rows > 0
+    assert pq.read_table(tmp_path / keys[0]).num_rows > 0
 
 
-def test_weekly_summary_builds(tmp_path):
+def test_weekly_summary_builds():
     state = State()
     seed_history(state, days=14)
     embeds, files = weekly.build(make_config(), state, TODAY)
     assert set(files) == {"heatmap.png", "trend.png"}
     assert files["heatmap.png"][:4] == b"\x89PNG"
-    assert embeds[2]["fields"][0]["name"].startswith("🏆")
+    fields = embeds[2]["fields"]
+    assert fields[0]["name"].startswith("本週前 3 名")
+    assert {f["name"] for f in fields} >= {"東京 去程", "東京 回程"}
+
+
+def test_weekly_only_current_routes():
+    state = State()
+    seed_history(state, days=14)  # 歷史裡只有東京
+    cfg = make_config(destinations=[route(name="札幌", dests=["CTS"])])
+    _, files = weekly.build(cfg, state, TODAY)
+    assert files == {}
 
 
 def test_discord_batches_respect_limits():
@@ -217,13 +203,44 @@ def test_discord_sends_content_once(n):
     assert all("content" not in m["payload"] for m in d.sent[1:])
 
 
-def test_per_date_strategy_reuses_scan_details():
-    provider = FakeProvider(level="low")
+def test_report_html_renders():
+    from flight_bot.report import build_data, render
+
+    cheap = date(2026, 12, 8)
     state = State()
-    daily = make_daily(provider, state, Discord(dry_run=True), scan={"strategy": "per_date"})
+    seed_history(state)
+    daily = make_daily(FakeProvider(cheap_day=cheap), state)
     report = daily.run()
-    assert provider.calls["calendar"] == 0
-    assert report.calendar_tasks == 0
-    assert report.combos > 0
-    assert report.alerts  # 掃描時已取得價格等級，google_low 可以觸發
-    assert report.verify_tasks == 0
+    data = build_data(daily.cfg, report, daily.runner.stats, "r1", TODAY, daily.started,
+                      daily.started + timedelta(minutes=20), daily.coverage_note(), [TODAY.isoformat()])
+    assert len(data["legs"]) == len(report.legs)
+    leg = next(x for x in data["legs"] if x["date"] == cheap.isoformat() and x["out"])
+    assert [f["price"] for f in leg["flights"]] == [1500, 3400]
+    assert leg["flights"][0]["nos"] == ["IT200"] and leg["flights"][0]["st"] == "new"
+    assert leg["url"].startswith("https://www.google.com/travel/flights")
+    assert data["routes"][0]["days"] == [5, 6, 7] and data["routes"][0]["range"] == ["2026-11-01", "2027-01-31"]
+    page = render(data)
+    assert "__DATA__" not in page and "<title>機票總覽 (" in page
+    assert "</script>" not in page.split('<script id="data" type="application/json">')[1].split("</script>")[0]
+
+
+def test_summary_when_nothing_qualifies():
+    from flight_bot.notify.alerts import build_summary
+
+    cfg = make_config()
+    embed = build_summary([], cfg.routes(), TODAY, "https://example.com/", "累積資料中")
+    assert "今天沒有符合條件的航班" in embed["description"]
+    assert "[開啟完整報告](https://example.com/)" in embed["description"]
+    assert embed["url"] == "https://example.com/"
+
+
+def test_coverage_note_per_route():
+    state = State()
+    seed_history(state)  # 東京已經有 10 天歷史
+    cfg = make_config(destinations=[route(origins=["TPE"]), route(name="大阪", origins=["TPE"], dests=["KIX"])])
+    daily = Daily(cfg, FakeProvider(), state, RawWriter("r1", TODAY), Discord(dry_run=True),
+                  Runner(cfg.runner, sleep=lambda s: None), TODAY, "r1")
+    daily.record_history(daily.collect())
+    note = daily.coverage_note()
+    assert note.startswith("大阪 累積資料中")
+    assert "東京" not in note

@@ -8,21 +8,8 @@ from datetime import date, datetime, timezone
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from ..providers.base import CalendarQuote, Flight, SearchResult
+from ..providers.base import Flight, SearchResult
 from .backend import Backend
-
-CALENDAR_SCHEMA = pa.schema([
-    ("run_id", pa.string()),
-    ("queried_at", pa.timestamp("s", tz="UTC")),
-    ("mode", pa.string()),
-    ("origin", pa.string()),
-    ("dest", pa.string()),
-    ("depart_date", pa.date32()),
-    ("return_date", pa.date32()),
-    ("max_stops", pa.int8()),
-    ("price", pa.int32()),
-    ("currency", pa.string()),
-])
 
 FLIGHTS_SCHEMA = pa.schema([
     ("run_id", pa.string()),
@@ -52,27 +39,17 @@ class RawWriter:
     def __init__(self, run_id: str, run_date: date):
         self.run_id = run_id
         self.run_date = run_date
-        self.calendar: list[dict] = []
         self.flights: list[dict] = []
 
     @staticmethod
     def _now() -> datetime:
         return datetime.now(timezone.utc).replace(microsecond=0)
 
-    def add_calendar(self, mode, origin, dest, max_stops, quotes: list[CalendarQuote]) -> None:
-        ts = self._now()
-        for q in quotes:
-            self.calendar.append({
-                "run_id": self.run_id, "queried_at": ts, "mode": mode, "origin": origin, "dest": dest,
-                "depart_date": q.depart_date, "return_date": q.return_date, "max_stops": max_stops,
-                "price": q.price, "currency": "TWD",
-            })
-
-    def add_search(self, purpose, mode, origin, dest, depart: date, ret: date | None,
-                   result: SearchResult | None, error: str | None = None) -> None:
+    def add_search(self, purpose, origin, dest, depart: date, result: SearchResult | None,
+                   error: str | None = None) -> None:
         base = {
-            "run_id": self.run_id, "queried_at": self._now(), "purpose": purpose, "mode": mode,
-            "origin": origin, "dest": dest, "depart_date": depart, "return_date": ret, "currency": "TWD",
+            "run_id": self.run_id, "queried_at": self._now(), "purpose": purpose, "mode": "one_way",
+            "origin": origin, "dest": dest, "depart_date": depart, "return_date": None, "currency": "TWD",
         }
         if error is not None or result is None:
             self.flights.append({**base, "status": "error", "error": error})
@@ -85,7 +62,7 @@ class RawWriter:
 
     def flush(self, backend: Backend) -> list[str]:
         keys = []
-        for kind, rows, schema in (("calendar", self.calendar, CALENDAR_SCHEMA), ("flights", self.flights, FLIGHTS_SCHEMA)):
+        for kind, rows, schema in (("flights", self.flights, FLIGHTS_SCHEMA),):
             if not rows:
                 continue
             table = pa.Table.from_pylist(rows, schema=schema)

@@ -1,40 +1,25 @@
-"""即時降價訊息。"""
+"""Discord 每日總結（完整列表在網頁報告）。"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from datetime import date
+from typing import TYPE_CHECKING
 
-from .. import airports
-from ..links import flights_url
-from ..pairing import Combo, MonthBest
-from ..pricing import TRIGGER_ORDER, Evaluation
-from ..providers.base import Flight
+from ..config import Route
+from ..pricing import TRIGGER_ORDER
+
+if TYPE_CHECKING:
+    from ..daily import LegDay
 
 COLORS = {
-    "new_low": 0x2ECC71,  # 🟢
-    "below_median": 0x3498DB,  # 🔵
-    "google_low": 0xF1C40F,  # 🟡
+    "new_low": 0x2ECC71,  # 綠
+    "below_median": 0x3498DB,  # 藍
+    "google_low": 0xF1C40F,  # 黃
     "max_price": 0x9B59B6,
 }
+NO_ALERT_COLOR = 0x95A5A6
 WEEKDAYS = "一二三四五六日"
-LEVELS = {"low": "偏低", "typical": "一般", "high": "偏高"}
-
-
-@dataclass
-class Alert:
-    combo: Combo
-    price: int
-    evaluation: Evaluation
-    month_best: MonthBest | None = None
-    out_flight: Flight | None = None  # 來回模式只有這個
-    back_flight: Flight | None = None
-    out_price: int | None = None
-    back_price: int | None = None
-    levels: list[str | None] = field(default_factory=list)
-
-    @property
-    def top_trigger(self) -> str:
-        return min(self.evaluation.triggers, key=TRIGGER_ORDER.index)
+TRIGGER_NAMES = {"new_low": "新低", "below_median": "低於中位數", "google_low": "Google 偏低", "max_price": "低於設定"}
 
 
 def money(n: int | float) -> str:
@@ -45,76 +30,57 @@ def short_date(d) -> str:
     return f"{d.month}/{d.day}（{WEEKDAYS[d.weekday()]}）"
 
 
-def _title(a: Alert) -> str:
-    c = a.combo
-    month = f"{c.depart.month} 月"
-    label = {
-        "new_low": f"{month}新低",
-        "below_median": f"{month}低於中位數",
-        "google_low": "Google 評為偏低",
-        "max_price": "低於設定價格",
-    }[a.top_trigger]
-    return f"✈️ {airports.name(c.dest)} {c.dest} ｜ {label}"
+def fmt_window(window: tuple[int, int] | None) -> str:
+    if window is None:
+        return "不限"
+    (h1, m1), (h2, m2) = divmod(window[0], 60), divmod(window[1], 60)
+    return f"{h1:02d}:{m1:02d}–{h2:02d}:{m2:02d}"
 
 
-def _leg_lines(label: str, d, origin: str, dest: str, f: Flight | None) -> list[str]:
-    if f is None:
-        return [f"{label}  {short_date(d)} {origin} → {dest}"]
-    stops = "直飛" if f.stops == 0 else f"轉機 {f.stops} 次（{'、'.join(s.to_airport for s in f.segments[:-1])}）"
-    carriers = "、".join(airports.airline(a) for a in f.airlines)
-    hours, mins = divmod(f.duration_min, 60)
-    return [
-        f"{label}  {short_date(d)} {origin} {f.depart_at:%H:%M} → {dest} {f.arrive_at:%H:%M}",
-        f"　　　{carriers} {' '.join(f.flight_nos)} ・ {stops} ・ {hours}h{mins:02d}m",
-    ]
+def _cheapest_line(label: str, legs: list[LegDay]) -> str:
+    if not legs:
+        return f"{label} —"
+    best = min(legs, key=lambda leg: (leg.cheapest.price, leg.day))
+    hits = sum(len(leg.hits) for leg in legs)
+    return (f"{label} {money(best.cheapest.price)} 起（{short_date(best.day)} {best.origin}→{best.dest}）"
+            + (f" ・ 符合 {hits} 班" if hits else ""))
 
 
-def build_embed(a: Alert) -> dict:
-    c = a.combo
+def build_summary(legs: list[LegDay], routes: list[Route], run_date: date, url: str | None,
+                  coverage_note: str | None = None) -> dict:
+    """每日總結：每條航線去程、回程各一行最低單程價和符合條件的班數，完整列表看網頁報告。"""
+    hits = [(leg, f) for leg in legs for f in leg.hits]
+    counts = {t: sum(1 for _, f in hits if t in f.evaluation.triggers) for t in TRIGGER_ORDER}
+    new = sum(1 for _, f in hits if f.status == "new")
+    down = sum(1 for _, f in hits if f.status == "down")
+
     lines = []
-    if c.mode == "one_way" and a.out_price is not None and a.back_price is not None:
-        lines.append(f"💰 **{money(a.price)}**（去 {a.out_price:,} + 回 {a.back_price:,}）")
+    if hits:
+        detail = "、".join(f"{TRIGGER_NAMES[t]} {n}" for t, n in counts.items() if n)
+        lines.append(f"符合條件的單程航班 **{len(hits)}** 班，新出現 {new} 班、降價 {down} 班")
+        lines.append(f"（{detail}）")
     else:
-        lines.append(f"💰 **{money(a.price)}**（來回）")
-
-    notes = []
-    pct = a.evaluation.pct_below_median
-    if pct is not None and pct > 0:
-        notes.append(f"比 {c.depart.month} 月中位數低 {pct:.0f}%")
-    known = [lv for lv in a.levels if lv]
-    if known:
-        notes.append("Google：" + " / ".join(LEVELS[lv] for lv in known))
-    if notes:
-        lines.append("📉 " + " ・ ".join(notes))
+        lines.append("今天沒有符合條件的航班")
     lines.append("")
 
-    if c.mode == "one_way":
-        lines += _leg_lines("去程", c.depart, c.out_origin, c.dest, a.out_flight)
-        lines += _leg_lines("回程", c.ret, c.dest, c.back_origin, a.back_flight)
-    else:
-        lines += _leg_lines("去程", c.depart, c.out_origin, c.dest, a.out_flight)
-        lines.append(f"回程  {short_date(c.ret)} {c.dest} → {c.back_origin}")
-    lines.append(f"停留 {c.stay_days} 天")
+    for r in routes:
+        mine = [leg for leg in legs if leg.route.id == r.id]
+        lines.append(f"**{r.name}**")
+        lines.append(_cheapest_line("　去程", [leg for leg in mine if leg.outbound]))
+        lines.append(_cheapest_line("　回程", [leg for leg in mine if not leg.outbound]))
 
-    if a.month_best and a.month_best.combo.key == c.key and a.month_best.nearby:
-        lines.append(f"\n另有 {a.month_best.nearby} 組 {money(a.month_best.nearby_price)} 以下")
+    if coverage_note:
+        lines += ["", coverage_note]
+    if url:
+        lines += ["", f"[開啟完整報告]({url})"]
 
-    stops = c.target.max_stops
-    if c.mode == "one_way":
-        out_url = flights_url(c.out_origin, c.dest, c.depart, max_stops=stops)
-        back_url = flights_url(c.dest, c.back_origin, c.ret, max_stops=stops)
-        lines.append(f"🔗 [查看去程]({out_url}) ・ [查看回程]({back_url})")
-    else:
-        lines.append(f"🔗 [查看航班]({flights_url(c.out_origin, c.dest, c.depart, c.ret, stops)})")
-
-    return {
-        "title": _title(a),
+    tops = [min(f.evaluation.triggers, key=TRIGGER_ORDER.index) for _, f in hits]
+    color = COLORS[min(tops, key=TRIGGER_ORDER.index)] if tops else NO_ALERT_COLOR
+    embed = {
+        "title": f"每日報告 {run_date.month}/{run_date.day}（{WEEKDAYS[run_date.weekday()]}）",
         "description": "\n".join(lines),
-        "color": COLORS[a.top_trigger],
-        "footer": {"text": f"{c.target.group} ・ {' '.join(a.evaluation.triggers)}"},
+        "color": color,
     }
-
-
-def build_embeds(alerts: list[Alert]) -> list[dict]:
-    ordered = sorted(alerts, key=lambda a: (TRIGGER_ORDER.index(a.top_trigger), -(a.evaluation.pct_below_median or 0)))
-    return [build_embed(a) for a in ordered]
+    if url:
+        embed["url"] = url
+    return embed

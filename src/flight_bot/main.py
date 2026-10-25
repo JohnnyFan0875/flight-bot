@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -30,6 +31,8 @@ log = logging.getLogger("flight_bot")
 TAIPEI = timezone(timedelta(hours=8))
 STATE_KEY = "state/state.sqlite"
 STATE_BAK_KEY = "state/state.sqlite.bak"
+REPORT_PREFIX = "reports/daily/"
+SITE_DIR = Path("site")
 
 
 def load_dotenv(path: str = ".env") -> None:
@@ -94,7 +97,7 @@ def cmd_run(args) -> int:
     except Exception:
         tb = traceback.format_exc()
         log.error(tb)
-        discord.send(content=f"⚠️ **flight-bot 異常**\n程式發生未預期的例外\n```\n{tb[-1500:]}\n```")
+        discord.send(content=f"**flight-bot 異常**\n程式發生未預期的例外\n```\n{tb[-1500:]}\n```")
         state.close()
         return 1
 
@@ -119,18 +122,46 @@ def run_daily(cfg, state, discord, backend, today, run_id, dry_run, raw) -> None
     finally:
         stats = runner.stats
         state.finish_run(run_id, stats.total("ok"), stats.total("failed"), stats.total("empty"),
-                         stats.aborted, daily.report.calendar_failed, stats.by_kind())
+                         stats.aborted, 0, stats.by_kind())
         state.commit()
         if backend and not dry_run:
             for key in raw.flush(backend):
                 log.info("已寫入 %s", key)
 
-    log.info(
-        "完成：日期 API %d 次（失敗 %d）、逐日備案 %d 次、組合 %d、候選 %d、明細 %d、驗證 %d、通知 %d 組",
-        report.calendar_tasks, report.calendar_failed, report.fallback_tasks, report.combos,
-        report.candidates, report.detail_tasks, report.verify_tasks, len(report.alerts),
-    )
+    log.info("完成：逐日查詢 %d 次、單程航班 %d 班（%d 個日期）、符合條件 %d 班",
+             report.scan_tasks, report.flights, len(report.legs), len(report.hits))
     log.info("請求統計：%s", runner.stats.by_kind())
+    publish_report(cfg, daily, runner, backend, today, run_id, dry_run)
+
+
+def publish_report(cfg, daily, runner, backend, today, run_id, dry_run) -> None:
+    """產生網頁報告到 site/（GitHub Pages 部署用）；正式執行時另存一份到 R2 當歷史記錄。"""
+    from .report import build_data, render
+
+    day = today.isoformat()
+    keys = backend.list(REPORT_PREFIX) if backend else []
+    dates = sorted({k.removeprefix(REPORT_PREFIX).removesuffix(".html") for k in keys if k.endswith(".html")} | {day})
+    dates = [d for d in dates if d <= day][-cfg.report.keep_days:]
+
+    data = build_data(cfg, daily.report, runner.stats, run_id, today, daily.started,
+                      datetime.now(timezone.utc), daily.coverage_note(), dates)
+    archive = render(data, base="../")
+    if backend and not dry_run:
+        backend.put(f"{REPORT_PREFIX}{day}.html", archive.encode(), "text/html; charset=utf-8")
+
+    (SITE_DIR / "d").mkdir(parents=True, exist_ok=True)
+    (SITE_DIR / ".nojekyll").write_text("")
+    (SITE_DIR / "index.html").write_text(render(data), encoding="utf-8")
+    # 每份報告打開時讀這個檔案更新日期選單，舊報告也能跳到比它新的日期
+    (SITE_DIR / "dates.json").write_text(json.dumps(dates), encoding="utf-8")
+    (SITE_DIR / "d" / f"{day}.html").write_text(archive, encoding="utf-8")
+    for d in dates:
+        if d == day or backend is None:
+            continue
+        old = backend.get(f"{REPORT_PREFIX}{d}.html")
+        if old:
+            (SITE_DIR / "d" / f"{d}.html").write_bytes(old)
+    log.info("報告已產生：%s（歷史 %d 天）", (SITE_DIR / "index.html").resolve(), len(dates))
 
 
 def run_weekly(cfg, state, discord, backend, today, dry_run) -> None:
@@ -154,25 +185,18 @@ def run_weekly(cfg, state, discord, backend, today, dry_run) -> None:
 
 
 def print_plan(cfg, today: date) -> int:
-    print(f"今天：{today}　策略：{cfg.scan.strategy}")
-    for t in cfg.targets():
-        print(f"- {t.group}/{t.dest} {t.mode} 出發地 {','.join(t.origins)} 轉機 ≤{t.max_stops} 停留 {t.trip_length_days}")
-    if cfg.scan.strategy == "calendar":
-        tasks = planner.calendar_tasks(cfg, today)
-        print(f"\n日期 API：{len(tasks)} 次")
-        for t in tasks:
-            length = f" 停留 {t.trip_length} 天" if t.trip_length else ""
-            print(f"  {t.leg.origin}→{t.leg.dest} {t.start} ~ {t.end}（{(t.end - t.start).days + 1} 天）{length}")
-        fallback = planner.per_date_tasks(cfg, today)
-        print(f"\n（日期 API 全部失敗時，逐日備案約 {len(fallback)} 次）")
-    else:
-        tasks = planner.per_date_tasks(cfg, today)
-        per_leg = Counter(f"{t.leg.origin}→{t.leg.dest}" for t in tasks)
-        print(f"\n逐日查詢：{len(tasks)} 次")
-        for k, n in sorted(per_leg.items()):
-            print(f"  {k}: {n}")
-    verify = f"、驗證 {cfg.scan.verify_samples} 次" if cfg.scan.strategy == "calendar" else ""
-    print(f"明細查詢最多 {cfg.scan.detail_budget} 次{verify}（掃描時已查過的日期不會重複查）")
+    print(f"今天：{today}")
+    from .notify.alerts import fmt_window
+
+    for r in cfg.routes():
+        print(f"- {r.name}：{','.join(r.origins)} ⇄ {','.join(r.dests)} 去程 {r.query_start} ~ {r.query_end} "
+              f"天數 {list(r.trip_days)} 轉機 ≤{r.max_stops} "
+              f"去程 {fmt_window(r.outbound_time)}、回程 {fmt_window(r.return_time)}")
+    tasks = planner.per_date_tasks(cfg, today)
+    per_leg = Counter(f"{t.origin}→{t.dest}" for t in tasks)
+    print(f"\n逐日查詢：{len(tasks)} 次（同一組機場、同一天只查一次，多條航線共用）")
+    for k, n in sorted(per_leg.items()):
+        print(f"  {k}: {n}")
     return 0
 
 
@@ -214,8 +238,8 @@ def cmd_test_webhook(args) -> int:
     discord = Discord()
     if discord.dry_run:
         print("沒有設定 DISCORD_WEBHOOK_URL（環境變數或 .env），只印出內容：")
-    discord.send(content="✅ flight-bot webhook 測試", embeds=[{
-        "title": "✈️ 測試訊息", "description": "如果看得到這則訊息，webhook 設定正確。", "color": 0x2ECC71,
+    discord.send(content="flight-bot webhook 測試", embeds=[{
+        "title": "測試訊息", "description": "如果看得到這則訊息，webhook 設定正確。", "color": 0x2ECC71,
     }])
     return 0
 

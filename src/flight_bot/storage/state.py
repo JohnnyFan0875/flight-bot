@@ -1,4 +1,4 @@
-"""state.sqlite：配對用的最新價格、明細快取、歷史價格、通知記錄、執行記錄。"""
+"""state.sqlite：各日期最近一次查到的航班、單程歷史價格、執行記錄。"""
 
 from __future__ import annotations
 
@@ -9,57 +9,32 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS quotes (
-    mode TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS searches (
     origin TEXT NOT NULL,
     dest TEXT NOT NULL,
     depart_date TEXT NOT NULL,
-    return_date TEXT NOT NULL DEFAULT '',  -- 單程為空字串
-    price INTEGER,                          -- NULL = 沒有航班
-    source TEXT NOT NULL,                   -- calendar / per_date
+    max_stops INTEGER NOT NULL,
+    price_level TEXT,                       -- Google 價格等級
+    typical_low INTEGER,                    -- Google 的典型價格區間
+    typical_high INTEGER,
+    flights_json TEXT NOT NULL,             -- 這一天查到的全部航班（[] = 沒有航班）
+    run_date TEXT NOT NULL,                 -- 哪一天的執行查到的
     queried_at TEXT NOT NULL,
-    PRIMARY KEY (mode, origin, dest, depart_date, return_date)
+    prev_flights_json TEXT,                 -- 前一天以前最後一次查到的航班，算漲跌用
+    prev_run_date TEXT,
+    PRIMARY KEY (origin, dest, depart_date)
 );
-CREATE TABLE IF NOT EXISTS details (
-    mode TEXT NOT NULL,
-    origin TEXT NOT NULL,
-    dest TEXT NOT NULL,
-    depart_date TEXT NOT NULL,
-    return_date TEXT NOT NULL DEFAULT '',
-    price INTEGER,
-    price_level TEXT,
-    flight_json TEXT,
-    queried_at TEXT NOT NULL,
-    PRIMARY KEY (mode, origin, dest, depart_date, return_date)
-);
-CREATE TABLE IF NOT EXISTS combo_history (
+CREATE TABLE IF NOT EXISTS leg_history (
     run_date TEXT NOT NULL,
-    dest TEXT NOT NULL,
-    mode TEXT NOT NULL,
-    depart_date TEXT NOT NULL,
-    return_date TEXT NOT NULL,
-    origins TEXT NOT NULL,
-    price INTEGER NOT NULL,
-    PRIMARY KEY (run_date, dest, mode, depart_date)
-);
-CREATE INDEX IF NOT EXISTS combo_history_month
-    ON combo_history (dest, mode, substr(depart_date, 1, 7), run_date);
-CREATE TABLE IF NOT EXISTS notified (
-    key TEXT PRIMARY KEY,
-    price INTEGER NOT NULL,
-    notified_at TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS verify_log (
-    run_id TEXT NOT NULL,
-    mode TEXT NOT NULL,
+    route TEXT NOT NULL,                    -- 分組/航線名稱
     origin TEXT NOT NULL,
     dest TEXT NOT NULL,
     depart_date TEXT NOT NULL,
-    return_date TEXT NOT NULL DEFAULT '',
-    calendar_price INTEGER,
-    detail_price INTEGER,
-    logged_at TEXT NOT NULL
+    price INTEGER NOT NULL,                 -- 當天符合航線規則的最低單程價格
+    PRIMARY KEY (run_date, route, origin, dest, depart_date)
 );
+CREATE INDEX IF NOT EXISTS leg_history_month
+    ON leg_history (route, origin, dest, substr(depart_date, 1, 7), run_date);
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
     mode TEXT NOT NULL,
@@ -76,9 +51,8 @@ CREATE TABLE IF NOT EXISTS runs (
 
 HISTORY_KEEP_DAYS = 400
 
-
-def _ret(d: date | None) -> str:
-    return d.isoformat() if d else ""
+# 舊版 state 缺少的欄位：(資料表, 欄位, 型別)
+MIGRATIONS: list[tuple[str, str, str]] = []
 
 
 def now_iso() -> str:
@@ -91,6 +65,13 @@ class State:
         self.db = sqlite3.connect(self.path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        for table, column, kind in MIGRATIONS:
+            columns = {r["name"] for r in self.db.execute(f"PRAGMA table_info({table})")}
+            if column not in columns:
+                self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
     def close(self) -> None:
         self.db.commit()
@@ -99,105 +80,76 @@ class State:
     def commit(self) -> None:
         self.db.commit()
 
-    # ----- quotes -----
+    # ----- searches -----
 
-    def upsert_quotes(self, rows: list[tuple]) -> None:
-        """rows：(mode, origin, dest, depart_date, return_date|None, price|None, source)。"""
-        ts = now_iso()
-        self.db.executemany(
-            "INSERT OR REPLACE INTO quotes VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [(m, o, d, dep.isoformat(), _ret(r), p, s, ts) for m, o, d, dep, r, p, s in rows],
-        )
-
-    def load_quotes(self, mode: str, origin: str, dest: str, fresh_since: datetime) -> dict:
-        """回傳 {(depart_date, return_date|None): price}，只含 fresh_since 之後更新、且有價格的日期。"""
-        cur = self.db.execute(
-            "SELECT depart_date, return_date, price FROM quotes "
-            "WHERE mode = ? AND origin = ? AND dest = ? AND price IS NOT NULL AND queried_at >= ?",
-            (mode, origin, dest, fresh_since.isoformat(timespec="seconds")),
-        )
-        return {
-            (date.fromisoformat(r["depart_date"]), date.fromisoformat(r["return_date"]) if r["return_date"] else None): r["price"]
-            for r in cur
-        }
-
-    # ----- details -----
-
-    def upsert_detail(self, mode, origin, dest, depart: date, ret: date | None, price, price_level, flight: dict | None) -> None:
+    def upsert_search(self, origin, dest, depart: date, max_stops: int, price_level, typical: tuple[int, int] | None,
+                      flights: list[dict], run_date: date) -> None:
+        """同一天重跑時，保留前一天以前的那份當作比較對象。"""
+        old = self.get_search(origin, dest, depart)
+        day = run_date.isoformat()
+        prev_json, prev_day = None, None
+        if old is not None:
+            if old["run_date"] < day:
+                prev_json, prev_day = old["flights_json"], old["run_date"]
+            else:
+                prev_json, prev_day = old["prev_flights_json"], old["prev_run_date"]
         self.db.execute(
-            "INSERT OR REPLACE INTO details VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (mode, origin, dest, depart.isoformat(), _ret(ret), price, price_level,
-             json.dumps(flight, ensure_ascii=False) if flight else None, now_iso()),
+            "INSERT OR REPLACE INTO searches VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (origin, dest, depart.isoformat(), max_stops, price_level,
+             typical[0] if typical else None, typical[1] if typical else None,
+             json.dumps(flights, ensure_ascii=False), day, now_iso(), prev_json, prev_day),
         )
 
-    def get_detail(self, mode, origin, dest, depart: date, ret: date | None, since: datetime) -> sqlite3.Row | None:
+    def get_search(self, origin, dest, depart: date) -> sqlite3.Row | None:
         return self.db.execute(
-            "SELECT * FROM details WHERE mode = ? AND origin = ? AND dest = ? AND depart_date = ? "
-            "AND return_date = ? AND queried_at >= ?",
-            (mode, origin, dest, depart.isoformat(), _ret(ret), since.isoformat(timespec="seconds")),
+            "SELECT * FROM searches WHERE origin = ? AND dest = ? AND depart_date = ?",
+            (origin, dest, depart.isoformat()),
         ).fetchone()
 
-    # ----- combo_history -----
+    def load_searches(self, origin: str, dest: str, start: date, end: date, fresh_since: datetime) -> list[sqlite3.Row]:
+        """start 到 end 之間、fresh_since 之後查過的日期，依日期排序。"""
+        return self.db.execute(
+            "SELECT * FROM searches WHERE origin = ? AND dest = ? AND depart_date BETWEEN ? AND ? "
+            "AND queried_at >= ? ORDER BY depart_date",
+            (origin, dest, start.isoformat(), end.isoformat(), fresh_since.isoformat(timespec="seconds")),
+        ).fetchall()
+
+    # ----- leg_history -----
 
     def add_history(self, run_date: date, rows: list[tuple]) -> None:
-        """rows：(dest, mode, depart_date, return_date, origins, price)，每個出發日只存最便宜的一組。"""
+        """rows：(route, origin, dest, depart_date, price)，每個日期存符合航線規則的最低價。"""
         self.db.executemany(
-            "INSERT OR REPLACE INTO combo_history VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(run_date.isoformat(), dest, mode, dep.isoformat(), ret.isoformat(), origins, price)
-             for dest, mode, dep, ret, origins, price in rows],
+            "INSERT OR REPLACE INTO leg_history VALUES (?, ?, ?, ?, ?, ?)",
+            [(run_date.isoformat(), route, o, d, dep.isoformat(), price) for route, o, d, dep, price in rows],
         )
         cutoff = (run_date - timedelta(days=HISTORY_KEEP_DAYS)).isoformat()
-        self.db.execute("DELETE FROM combo_history WHERE run_date < ?", (cutoff,))
+        self.db.execute("DELETE FROM leg_history WHERE run_date < ?", (cutoff,))
 
-    def history_start(self, dest: str, mode: str) -> date | None:
-        row = self.db.execute(
-            "SELECT MIN(run_date) FROM combo_history WHERE dest = ? AND mode = ?", (dest, mode)
-        ).fetchone()
+    def history_start(self, route: str) -> date | None:
+        row = self.db.execute("SELECT MIN(run_date) FROM leg_history WHERE route = ?", (route,)).fetchone()
         return date.fromisoformat(row[0]) if row[0] else None
 
-    def month_baseline(self, dest: str, mode: str, month: str, before: date, median_days: int = 30) -> tuple[int | None, float | None]:
+    def month_baseline(self, route: str, origin: str, dest: str, month: str, before: date,
+                       median_days: int = 30) -> tuple[int | None, float | None]:
         """(歷史最低價, 近 median_days 天的中位數)，只看 before 之前的執行。month 格式 YYYY-MM。"""
+        where = "route = ? AND origin = ? AND dest = ? AND substr(depart_date, 1, 7) = ?"
+        args = (route, origin, dest, month)
         lowest = self.db.execute(
-            "SELECT MIN(price) FROM combo_history WHERE dest = ? AND mode = ? "
-            "AND substr(depart_date, 1, 7) = ? AND run_date < ?",
-            (dest, mode, month, before.isoformat()),
+            f"SELECT MIN(price) FROM leg_history WHERE {where} AND run_date < ?", (*args, before.isoformat()),
         ).fetchone()[0]
         since = (before - timedelta(days=median_days)).isoformat()
         prices = [
             r[0]
             for r in self.db.execute(
-                "SELECT price FROM combo_history WHERE dest = ? AND mode = ? "
-                "AND substr(depart_date, 1, 7) = ? AND run_date >= ? AND run_date < ?",
-                (dest, mode, month, since, before.isoformat()),
+                f"SELECT price FROM leg_history WHERE {where} AND run_date >= ? AND run_date < ?",
+                (*args, since, before.isoformat()),
             )
         ]
         return lowest, (statistics.median(prices) if prices else None)
 
     def history_rows(self, since: date) -> list[sqlite3.Row]:
         return self.db.execute(
-            "SELECT * FROM combo_history WHERE run_date >= ? ORDER BY run_date", (since.isoformat(),)
-        ).fetchall()
-
-    # ----- notified -----
-
-    def last_notified(self, key: str) -> int | None:
-        row = self.db.execute("SELECT price FROM notified WHERE key = ?", (key,)).fetchone()
-        return row[0] if row else None
-
-    def mark_notified(self, key: str, price: int) -> None:
-        self.db.execute("INSERT OR REPLACE INTO notified VALUES (?, ?, ?)", (key, price, now_iso()))
-
-    # ----- verify_log -----
-
-    def log_verify(self, run_id, mode, origin, dest, depart: date, ret: date | None, calendar_price, detail_price) -> None:
-        self.db.execute(
-            "INSERT INTO verify_log VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (run_id, mode, origin, dest, depart.isoformat(), _ret(ret), calendar_price, detail_price, now_iso()),
-        )
-
-    def verify_rows(self, since: datetime) -> list[sqlite3.Row]:
-        return self.db.execute(
-            "SELECT * FROM verify_log WHERE logged_at >= ?", (since.isoformat(timespec="seconds"),)
+            "SELECT * FROM leg_history WHERE run_date >= ? ORDER BY run_date", (since.isoformat(),)
         ).fetchall()
 
     # ----- runs -----

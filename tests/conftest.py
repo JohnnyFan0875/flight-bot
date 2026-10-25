@@ -12,19 +12,12 @@ def fixtures() -> Path:
     return FIXTURES
 
 
+def route(**overrides) -> dict:
+    return {"name": "東京", "origins": ["TPE", "TSA"], "dests": ["NRT"], "query_start": "2026-11-01",
+            "query_end": "2027-01-31", "trip_days": [5, 6, 7], **overrides}
+
+
 def make_config(**overrides) -> Config:
-    data = {
-        "groups": {
-            "short_haul": {
-                "mode": "one_way",
-                "max_stops": 0,
-                "trip_length_days": [5, 7],
-                "destinations": [{"code": "NRT"}],
-            }
-        },
-        "defaults": {"origins": ["TPE", "TSA"]},
-        "scan": {"strategy": "calendar"},
-        "runner": {"delay_seconds": [0, 0], "retries": 0},
-    }
+    data = {"destinations": [route()], "runner": {"delay_seconds": [0, 0], "retries": 0}}
     data.update(overrides)
     return Config.model_validate(data)

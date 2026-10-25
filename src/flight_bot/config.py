@@ -1,29 +1,19 @@
-"""設定檔模型。覆寫優先順序：目的地 > 分組 > defaults。"""
+"""設定檔模型：destinations 是一條條航線，每條航線的設定都寫在自己底下。"""
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
-from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-Mode = Literal["one_way", "round_trip"]
+from . import airports
 
-# 可以在 defaults、分組、目的地三個層級設定的欄位
-OVERRIDABLE = (
-    "origins",
-    "search_from_days",
-    "search_to_days",
-    "depart_weekdays",
-    "allow_mixed_origins",
-    "max_stops",
-    "max_total_duration_h",
-    "max_layover_h",
-    "min_layover_min",
-    "trip_length_days",
-)
+TIME_WINDOW = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]|24):([0-5]\d)$")
+ANY_TIME = "any"
 
 
 class Strict(BaseModel):
@@ -36,106 +26,80 @@ def _check_airport(code: str) -> str:
     return code
 
 
-def _check_increasing(pair: list[int] | None, name: str) -> None:
-    if pair is not None and (len(pair) != 2 or pair[0] > pair[1]):
-        raise ValueError(f"{name} 必須是 [小, 大]：{pair}")
+def parse_time_window(value: str) -> tuple[int, int] | None:
+    """"06:00-14:00" → (360, 840)，單位是當天的第幾分鐘；"any" → None（不限）。"""
+    if value == ANY_TIME:
+        return None
+    m = TIME_WINDOW.match(value)
+    if not m:
+        raise ValueError(f"時段格式必須是 HH:MM-HH:MM 或 any：{value!r}")
+    start = int(m[1]) * 60 + int(m[2])
+    end = int(m[3]) * 60 + int(m[4])
+    if end > 24 * 60:
+        raise ValueError(f"時段結束時間不能超過 24:00：{value!r}")
+    return start, end
 
 
-class RouteSettings(Strict):
-    """三個層級共用的可覆寫欄位，None 代表沿用上一層。"""
+def _airports(v: list[str], name: str) -> list[str]:
+    if not v:
+        raise ValueError(f"{name} 不能是空的")
+    for code in v:
+        _check_airport(code)
+    if len(set(v)) != len(v):
+        raise ValueError(f"{name} 有重複的機場：{v}")
+    return v
 
-    origins: list[str] | None = None
-    search_from_days: int | None = Field(default=None, ge=0)
-    search_to_days: int | None = Field(default=None, ge=1)
-    depart_weekdays: list[int] | None = None
-    allow_mixed_origins: bool | None = None
-    max_stops: int | None = Field(default=None, ge=0, le=2)
-    max_total_duration_h: float | None = Field(default=None, gt=0)
-    max_layover_h: float | None = Field(default=None, gt=0)
-    min_layover_min: int | None = Field(default=None, ge=0)
-    trip_length_days: list[int] | None = None
+
+class RouteConfig(Strict):
+    """一條航線：出發地（可多個）往返目的地（可多個）。"""
+
+    name: str | None = None  # 顯示名稱；沒寫就用目的地名稱
+    enabled: bool = True
+    origins: list[str]
+    dests: list[str]
+    query_start: date  # 去程出發日的範圍（含兩端），範圍內每天都查
+    query_end: date
+    outbound_time: str = ANY_TIME  # 去程出發時間（當地時間），例如 "06:00-14:00"；"any" = 不限
+    return_time: str = ANY_TIME  # 回程出發時間
+    trip_days: list[int]  # 網頁配對去回程時使用的天數，例如 [5, 6, 7]
+    max_stops: int = Field(default=0, ge=0, le=2)  # 最多轉機次數，0 = 只要直飛
+    max_total_duration_h: float | None = Field(default=None, gt=0)  # 單程總飛行時間上限（含轉機）
+    max_layover_h: float | None = Field(default=None, gt=0)  # 每次轉機最長等待時間
+    min_layover_min: int | None = Field(default=None, ge=0)  # 每次轉機最短等待時間
 
     @field_validator("origins")
     @classmethod
-    def _origins(cls, v: list[str] | None) -> list[str] | None:
-        if v is not None:
-            if not v:
-                raise ValueError("origins 不能是空的")
-            for code in v:
-                _check_airport(code)
+    def _origins(cls, v: list[str]) -> list[str]:
+        return _airports(v, "origins")
+
+    @field_validator("dests")
+    @classmethod
+    def _dests(cls, v: list[str]) -> list[str]:
+        return _airports(v, "dests")
+
+    @field_validator("outbound_time", "return_time")
+    @classmethod
+    def _time(cls, v: str) -> str:
+        parse_time_window(v)
         return v
 
-    @field_validator("depart_weekdays")
+    @field_validator("trip_days")
     @classmethod
-    def _weekdays(cls, v: list[int] | None) -> list[int] | None:
-        if v is not None and any(d < 0 or d > 6 for d in v):
-            raise ValueError("depart_weekdays 只能是 0 到 6")
-        return v
+    def _trip_days(cls, v: list[int]) -> list[int]:
+        if not v:
+            raise ValueError("trip_days 不能是空的")
+        if any(n < 1 for n in v):
+            raise ValueError(f"trip_days 必須都大於 0：{v}")
+        return sorted(set(v))
 
     @model_validator(mode="after")
-    def _ranges(self) -> RouteSettings:
-        _check_increasing(self.trip_length_days, "trip_length_days")
-        if (
-            self.search_from_days is not None
-            and self.search_to_days is not None
-            and self.search_from_days > self.search_to_days
-        ):
-            raise ValueError("search_from_days 必須小於等於 search_to_days")
+    def _check(self) -> RouteConfig:
+        both = set(self.origins) & set(self.dests)
+        if both:
+            raise ValueError(f"機場不能同時是出發地和目的地：{sorted(both)}")
+        if self.query_start > self.query_end:
+            raise ValueError(f"query_start {self.query_start} 晚於 query_end {self.query_end}")
         return self
-
-
-class Defaults(RouteSettings):
-    origins: list[str] | None = ["TPE"]
-    search_from_days: int | None = 30
-    search_to_days: int | None = 210
-    depart_weekdays: list[int] | None = []
-    allow_mixed_origins: bool | None = True
-    max_stops: int | None = 0
-    trip_length_days: list[int] | None = [5, 7]
-
-
-class Destination(RouteSettings):
-    code: str
-    enabled: bool = True
-
-    _code = field_validator("code")(classmethod(lambda cls, v: _check_airport(v)))
-
-
-class Group(RouteSettings):
-    mode: Mode
-    destinations: list[Destination] = []
-
-
-class Tier(Strict):
-    until_days: int = Field(ge=1)
-    every: int = Field(ge=1)
-
-
-class ScanConfig(Strict):
-    # calendar 需要 Google 頁面 JavaScript 產生的 x-goog-batchexecute-bgr header，純 HTTP 請求會被擋
-    strategy: Literal["calendar", "per_date"] = "per_date"
-    calendar_max_days: int = Field(default=180, ge=1, le=180)
-    fallback_to_per_date: bool = True
-    per_date_tiers: list[Tier] = [
-        Tier(until_days=60, every=1),
-        Tier(until_days=120, every=3),
-        Tier(until_days=217, every=10),
-    ]
-    detail_budget: int = Field(default=40, ge=0)
-    verify_samples: int = Field(default=4, ge=0)
-
-    @field_validator("per_date_tiers")
-    @classmethod
-    def _tiers(cls, v: list[Tier]) -> list[Tier]:
-        if not v:
-            raise ValueError("per_date_tiers 不能是空的")
-        days = [t.until_days for t in v]
-        if days != sorted(days) or len(set(days)) != len(days):
-            raise ValueError("per_date_tiers 的 until_days 必須遞增")
-        return v
-
-    def max_every(self) -> int:
-        return max(t.every for t in self.per_date_tiers)
 
 
 class RunnerConfig(Strict):
@@ -153,6 +117,8 @@ class RunnerConfig(Strict):
 
 
 class MaxPrice(Strict):
+    """單程價格上限。"""
+
     default: int | None = None
     by_month: dict[int, int] = {}
 
@@ -166,7 +132,11 @@ class AlertsConfig(Strict):
     below_median_pct: float = Field(default=15, ge=0, lt=100)
     notify_new_low: bool = True
     warmup_days: int = Field(default=7, ge=0)
-    renotify_drop: int = Field(default=300, ge=0)
+
+
+class ReportConfig(Strict):
+    url: str | None = None  # 報告網址（GitHub Pages），Discord 總結會附上
+    keep_days: int = Field(default=30, ge=1)  # 網站上保留幾天的歷史報告
 
 
 class WeeklyConfig(Strict):
@@ -181,83 +151,77 @@ class HealthConfig(Strict):
 
 
 class Config(Strict):
-    defaults: Defaults = Defaults()
-    scan: ScanConfig = ScanConfig()
     runner: RunnerConfig = RunnerConfig()
     alerts: AlertsConfig = AlertsConfig()
     weekly_summary: WeeklyConfig = WeeklyConfig()
     health: HealthConfig = HealthConfig()
-    groups: dict[str, Group] = {}
+    report: ReportConfig = ReportConfig()
+    destinations: list[RouteConfig] = []
 
     @model_validator(mode="after")
-    def _tiers_cover_returns(self) -> Config:
-        last = self.scan.per_date_tiers[-1].until_days
-        for t in self.targets():
-            if t.latest_day() > last:
-                raise ValueError(
-                    f"per_date_tiers 最後一層 until_days={last} 沒有涵蓋 "
-                    f"{t.group}/{t.dest} 的最晚日期（第 {t.latest_day()} 天）"
-                )
+    def _unique_names(self) -> Config:
+        names = [r.name for r in self.routes()]
+        dup = sorted({n for n in names if names.count(n) > 1})
+        if dup:
+            raise ValueError(f"航線名稱重複：{dup}")
         return self
 
-    def targets(self) -> list[Target]:
-        """展開所有啟用中的目的地，套用覆寫規則。"""
-        out = []
-        for group_name, group in self.groups.items():
-            for dest in group.destinations:
-                if not dest.enabled:
-                    continue
-                merged: dict = {}
-                for layer in (self.defaults, group, dest):
-                    for key in OVERRIDABLE:
-                        value = getattr(layer, key)
-                        if value is not None:
-                            merged[key] = value
-                if merged["search_from_days"] > merged["search_to_days"]:
-                    raise ValueError(f"{group_name}/{dest.code}：search_from_days 大於 search_to_days")
-                out.append(
-                    Target(
-                        group=group_name,
-                        dest=dest.code,
-                        mode=group.mode,
-                        origins=tuple(merged["origins"]),
-                        search_from_days=merged["search_from_days"],
-                        search_to_days=merged["search_to_days"],
-                        depart_weekdays=tuple(merged["depart_weekdays"]),
-                        allow_mixed_origins=merged["allow_mixed_origins"],
-                        max_stops=merged["max_stops"],
-                        max_total_duration_h=merged.get("max_total_duration_h"),
-                        max_layover_h=merged.get("max_layover_h"),
-                        min_layover_min=merged.get("min_layover_min"),
-                        trip_length_days=(merged["trip_length_days"][0], merged["trip_length_days"][1]),
-                    )
-                )
-        return out
+    def routes(self) -> list[Route]:
+        """所有 enabled 的航線。"""
+        return [
+            Route(
+                name=rc.name or "、".join(airports.name(d) for d in rc.dests),
+                origins=tuple(rc.origins),
+                dests=tuple(rc.dests),
+                trip_days=tuple(rc.trip_days),
+                query_start=rc.query_start,
+                query_end=rc.query_end,
+                max_stops=rc.max_stops,
+                max_total_duration_h=rc.max_total_duration_h,
+                max_layover_h=rc.max_layover_h,
+                min_layover_min=rc.min_layover_min,
+                outbound_time=parse_time_window(rc.outbound_time),
+                return_time=parse_time_window(rc.return_time),
+            )
+            for rc in self.destinations
+            if rc.enabled
+        ]
 
 
 @dataclass(frozen=True)
-class Target:
-    """套用覆寫後，一個目的地的完整設定。"""
+class Route:
+    """一條航線的完整設定。"""
 
-    group: str
-    dest: str
-    mode: Mode
+    name: str
     origins: tuple[str, ...]
-    search_from_days: int
-    search_to_days: int
-    depart_weekdays: tuple[int, ...]
-    allow_mixed_origins: bool
-    max_stops: int
-    max_total_duration_h: float | None
-    max_layover_h: float | None
-    min_layover_min: int | None
-    trip_length_days: tuple[int, int]
+    dests: tuple[str, ...]
+    trip_days: tuple[int, ...]
+    query_start: date
+    query_end: date
+    max_stops: int = 0
+    max_total_duration_h: float | None = None
+    max_layover_h: float | None = None
+    min_layover_min: int | None = None
+    outbound_time: tuple[int, int] | None = None  # 分鐘，None = 不限
+    return_time: tuple[int, int] | None = None
 
-    def latest_day(self) -> int:
-        """會查到的最晚日期距今天幾天（單程模式的回程方向最晚）。"""
-        if self.mode == "one_way":
-            return self.search_to_days + self.trip_length_days[1]
-        return self.search_to_days
+    @property
+    def id(self) -> str:
+        """歷史價格以這個為單位；改名會重新累積。"""
+        return self.name
+
+    def legs(self) -> list[tuple[str, str, bool]]:
+        """(出發機場, 抵達機場, 是否為去程)：每個出發地 × 每個目的地的去程和回程。"""
+        out = [(o, d, True) for o in self.origins for d in self.dests]
+        return out + [(d, o, False) for d in self.dests for o in self.origins]
+
+    def date_range(self, outbound: bool, today: date) -> tuple[date, date]:
+        """要查的日期（含兩端）：去程是 query_start 到 query_end，回程再加上最短到最長的天數。
+        今天以前的日期不查，所以 start 可能晚於 end（這時沒有要查的日期）。"""
+        start, end = self.query_start, self.query_end
+        if not outbound:
+            start, end = start + timedelta(days=self.trip_days[0]), end + timedelta(days=self.trip_days[-1])
+        return max(start, today), end
 
 
 def load_config(path: str | Path = "config.yaml") -> Config:
