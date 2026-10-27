@@ -16,27 +16,9 @@ def target(**kw):
     return make_config(destinations=[route(**kw)]).routes()[0]
 
 
-def test_outbound_and_return_windows():
-    r = target(outbound_time="06:00-14:00", return_time="14:00-21:00")
-    assert rules.passes(flight(6, 0), r, outbound=True)
-    assert rules.passes(flight(14, 0), r, outbound=True)
-    assert not rules.passes(flight(14, 5), r, outbound=True)
-    assert not rules.passes(flight(5, 59), r, outbound=True)
-    assert rules.passes(flight(19, 40), r, outbound=False)
-    assert not rules.passes(flight(9, 0), r, outbound=False)
-
-
-def test_window_across_midnight():
-    r = target(outbound_time="22:00-02:00")
-    assert rules.passes(flight(23, 30), r)
-    assert rules.passes(flight(1, 0), r)
-    assert not rules.passes(flight(12, 0), r)
-
-
-def test_matching_keeps_all_in_window_sorted_by_price():
-    r = target(outbound_time="06:00-14:00")
+def test_matching_sorted_by_price():
     flights = [flight(2, 30, price=2000), flight(8, 0, price=4000), flight(13, 0, price=3500)]
-    assert [f.price for f in rules.matching(flights, r)] == [3500, 4000]
+    assert [f.price for f in rules.matching(flights, target())] == [2000, 3500, 4000]
 
 
 def test_max_stops():

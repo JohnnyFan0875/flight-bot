@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -12,10 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from . import airports
 
-TIME_WINDOW = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]|24):([0-5]\d)$")
-ANY_TIME = "any"
-
-
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -24,20 +19,6 @@ def _check_airport(code: str) -> str:
     if len(code) != 3 or not code.isalpha() or not code.isupper():
         raise ValueError(f"機場代碼必須是 3 個大寫字母：{code!r}")
     return code
-
-
-def parse_time_window(value: str) -> tuple[int, int] | None:
-    """"06:00-14:00" → (360, 840)，單位是當天的第幾分鐘；"any" → None（不限）。"""
-    if value == ANY_TIME:
-        return None
-    m = TIME_WINDOW.match(value)
-    if not m:
-        raise ValueError(f"時段格式必須是 HH:MM-HH:MM 或 any：{value!r}")
-    start = int(m[1]) * 60 + int(m[2])
-    end = int(m[3]) * 60 + int(m[4])
-    if end > 24 * 60:
-        raise ValueError(f"時段結束時間不能超過 24:00：{value!r}")
-    return start, end
 
 
 def _airports(v: list[str], name: str) -> list[str]:
@@ -59,8 +40,6 @@ class RouteConfig(Strict):
     dests: list[str]
     query_start: date  # 去程出發日的範圍（含兩端），範圍內每天都查
     query_end: date
-    outbound_time: str = ANY_TIME  # 去程出發時間（當地時間），例如 "06:00-14:00"；"any" = 不限
-    return_time: str = ANY_TIME  # 回程出發時間
     trip_days: list[int]  # 網頁配對去回程時使用的天數，例如 [5, 6, 7]
     max_stops: int = Field(default=0, ge=0, le=2)  # 最多轉機次數，0 = 只要直飛
     max_total_duration_h: float | None = Field(default=None, gt=0)  # 單程總飛行時間上限（含轉機）
@@ -76,12 +55,6 @@ class RouteConfig(Strict):
     @classmethod
     def _dests(cls, v: list[str]) -> list[str]:
         return _airports(v, "dests")
-
-    @field_validator("outbound_time", "return_time")
-    @classmethod
-    def _time(cls, v: str) -> str:
-        parse_time_window(v)
-        return v
 
     @field_validator("trip_days")
     @classmethod
@@ -180,8 +153,6 @@ class Config(Strict):
                 max_total_duration_h=rc.max_total_duration_h,
                 max_layover_h=rc.max_layover_h,
                 min_layover_min=rc.min_layover_min,
-                outbound_time=parse_time_window(rc.outbound_time),
-                return_time=parse_time_window(rc.return_time),
             )
             for rc in self.destinations
             if rc.enabled
@@ -202,8 +173,6 @@ class Route:
     max_total_duration_h: float | None = None
     max_layover_h: float | None = None
     min_layover_min: int | None = None
-    outbound_time: tuple[int, int] | None = None  # 分鐘，None = 不限
-    return_time: tuple[int, int] | None = None
 
     @property
     def id(self) -> str:

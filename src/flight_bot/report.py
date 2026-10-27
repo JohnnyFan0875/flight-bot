@@ -55,8 +55,7 @@ def _leg(leg: LegDay, route_index: int) -> dict:
 
 
 def build_data(cfg: Config, report, stats: Stats, run_id: str, run_date: date,
-               started: datetime, finished: datetime, coverage_note: str | None,
-               history: list[str]) -> dict:
+               started: datetime, finished: datetime, history: list[str]) -> dict:
     routes = cfg.routes()
     index = {r.id: k for k, r in enumerate(routes)}
     places = {code for r in routes for code in (*r.origins, *r.dests)}
@@ -73,7 +72,6 @@ def build_data(cfg: Config, report, stats: Stats, run_id: str, run_date: date,
             "failure_rate": round(stats.failure_rate() * 100, 1),
             "aborted": stats.aborted,
             "warnings": report.warnings,
-            "note": coverage_note,
         },
         "airports": {code: airports.name(code) for code in sorted(places)},
         "routes": [{

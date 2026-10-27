@@ -32,8 +32,6 @@ destinations:
     query_start: 2026-12-01  # 去程出發日範圍的第一天（今天以前的日期自動略過）
     query_end: 2027-02-28    # 去程出發日範圍的最後一天；範圍內每天都查
                              # 回程查 query_start + trip_days 最短天數 到 query_end + 最長天數
-    outbound_time: any       # 去程出發時間（當地時間），例如 "06:00-14:00"；any = 不限
-    return_time: any         # 回程出發時間（當地時間）
     trip_days: [10, 12, 14]  # 網頁上配對去回程用的天數（去程日 + N 天）
     max_stops: 1             # 最多轉機次數，0 = 只要直飛
     max_total_duration_h: 24 # 單程總時間上限（小時，含轉機等待）；null = 不限
@@ -46,8 +44,6 @@ destinations:
     dests: [CTS]
     query_start: 2026-12-01
     query_end: 2027-02-28
-    outbound_time: "06:00-12:00"
-    return_time: "14:00-21:00"
     trip_days: [5, 6, 7]
     max_stops: 0
     max_total_duration_h: null
@@ -60,8 +56,6 @@ destinations:
     dests: [SDJ]
     query_start: 2026-12-01
     query_end: 2027-02-28
-    outbound_time: "06:00-12:00"
-    return_time: "14:00-21:00"
     trip_days: [5, 6, 7]
     max_stops: 0
     max_total_duration_h: null
@@ -74,8 +68,6 @@ destinations:
     dests: [NRT, HND]
     query_start: 2026-12-01
     query_end: 2027-02-28
-    outbound_time: "06:00-14:00"
-    return_time: "14:00-21:00"
     trip_days: [5, 6, 7]
     max_stops: 0
     max_total_duration_h: null
@@ -88,9 +80,19 @@ destinations:
     dests: [HND]
     query_start: 2026-12-01
     query_end: 2027-02-28
-    outbound_time: "06:00-12:00"
-    return_time: "14:00-21:00"
     trip_days: [5, 6, 7]
+    max_stops: 0
+    max_total_duration_h: null
+    max_layover_h: null
+    min_layover_min: null
+
+  - name: 福岡
+    enabled: true
+    origins: [TPE]
+    dests: [FUK]
+    query_start: 2027-03-01
+    query_end: 2027-05-31
+    trip_days: [5]
     max_stops: 0
     max_total_duration_h: null
     max_layover_h: null

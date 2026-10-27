@@ -144,7 +144,7 @@ def publish_report(cfg, daily, runner, backend, today, run_id, dry_run) -> None:
     dates = [d for d in dates if d <= day][-cfg.report.keep_days:]
 
     data = build_data(cfg, daily.report, runner.stats, run_id, today, daily.started,
-                      datetime.now(timezone.utc), daily.coverage_note(), dates)
+                      datetime.now(timezone.utc), dates)
     archive = render(data, base="../")
     if backend and not dry_run:
         backend.put(f"{REPORT_PREFIX}{day}.html", archive.encode(), "text/html; charset=utf-8")
@@ -186,12 +186,9 @@ def run_weekly(cfg, state, discord, backend, today, dry_run) -> None:
 
 def print_plan(cfg, today: date) -> int:
     print(f"今天：{today}")
-    from .notify.alerts import fmt_window
-
     for r in cfg.routes():
         print(f"- {r.name}：{','.join(r.origins)} ⇄ {','.join(r.dests)} 去程 {r.query_start} ~ {r.query_end} "
-              f"天數 {list(r.trip_days)} 轉機 ≤{r.max_stops} "
-              f"去程 {fmt_window(r.outbound_time)}、回程 {fmt_window(r.return_time)}")
+              f"天數 {list(r.trip_days)} 轉機 ≤{r.max_stops}")
     tasks = planner.per_date_tasks(cfg, today)
     per_leg = Counter(f"{t.origin}→{t.dest}" for t in tasks)
     print(f"\n逐日查詢：{len(tasks)} 次（同一組機場、同一天只查一次，多條航線共用）")

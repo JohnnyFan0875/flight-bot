@@ -86,10 +86,11 @@ def test_cheap_day_triggers_on_one_way_price():
     assert leg.outbound and f.price == 1500
     assert f.evaluation.triggers == ["new_low", "below_median", "google_low"]
     assert leg.flights[1].price == 3400 and not leg.flights[1].evaluation.hit  # 同一天較貴的班次不算
-    [summary] = [e for m in discord.sent for e in m["payload"]["embeds"]]
-    assert summary["title"].startswith("每日報告")
-    assert "**東京**" in summary["description"]
-    assert "去程 TWD 1,500 起" in summary["description"] and "符合 1 班" in summary["description"]
+    [summary, tokyo] = [e for m in discord.sent for e in m["payload"]["embeds"]]
+    assert summary["title"].startswith("每日報告") and "符合條件的單程航班 **1** 班" in summary["description"]
+    assert tokyo["title"] == "東京（符合 1 班）"
+    # 12/8 是星期二，那一週去程上午最便宜的是 1,500
+    assert "\n12/7–13\n  去  1,500 / " in tokyo["description"]
 
     # 隔天價格不變：狀態是持平
     report2 = make_daily(FakeProvider(cheap_day=cheap), state, today=TODAY + timedelta(days=1)).run()
@@ -111,14 +112,6 @@ def test_google_low_without_history():
     assert report.hits
     assert all(leg.outbound and f.price == 3000 for leg, f in report.hits)
     assert all(f.evaluation.triggers == ["google_low"] for _, f in report.hits)
-
-
-def test_time_window_filters_flights():
-    cfg = {"destinations": [route(origins=["TPE"], outbound_time="09:00-14:00", return_time="06:00-12:00")]}
-    report = make_daily(FakeProvider(), State(), **cfg).run()
-    out = [leg for leg in report.legs if leg.outbound]
-    assert out and all([f.flight.flight_nos for f in leg.flights] == [["IT202"]] for leg in out)
-    assert not [leg for leg in report.legs if not leg.outbound]  # 回程 15:00 不在時段內
 
 
 def test_shared_pair_queried_once_but_listed_per_route():
@@ -158,6 +151,14 @@ def test_abort_after_consecutive_failures():
     assert any("提前結束" in w for w in report.warnings)
     assert any("flight-bot 異常" in (m["payload"].get("content") or "") for m in daily.discord.sent)
 
+
+
+def test_nothing_to_query_is_not_a_failure():
+    # 日期都已經過了：一次都不查，不算異常
+    daily = make_daily(FakeProvider(), State(), destinations=[route(query_start="2026-01-01", query_end="2026-02-01")])
+    report = daily.run()
+    assert report.scan_tasks == 0 and not report.warnings
+    assert not any("異常" in (m["payload"].get("content") or "") for m in daily.discord.sent)
 
 def test_raw_parquet_written(tmp_path):
     daily = make_daily(FakeProvider(), State())
@@ -212,7 +213,7 @@ def test_report_html_renders():
     daily = make_daily(FakeProvider(cheap_day=cheap), state)
     report = daily.run()
     data = build_data(daily.cfg, report, daily.runner.stats, "r1", TODAY, daily.started,
-                      daily.started + timedelta(minutes=20), daily.coverage_note(), [TODAY.isoformat()])
+                      daily.started + timedelta(minutes=20), [TODAY.isoformat()])
     assert len(data["legs"]) == len(report.legs)
     leg = next(x for x in data["legs"] if x["date"] == cheap.isoformat() and x["out"])
     assert [f["price"] for f in leg["flights"]] == [1500, 3400]
@@ -228,19 +229,8 @@ def test_summary_when_nothing_qualifies():
     from flight_bot.notify.alerts import build_summary
 
     cfg = make_config()
-    embed = build_summary([], cfg.routes(), TODAY, "https://example.com/", "累積資料中")
+    embed, route_embed = build_summary([], cfg.routes(), TODAY, "https://example.com/")
+    assert route_embed["description"] == "沒有航班資料"
     assert "今天沒有符合條件的航班" in embed["description"]
     assert "[開啟完整報告](https://example.com/)" in embed["description"]
     assert embed["url"] == "https://example.com/"
-
-
-def test_coverage_note_per_route():
-    state = State()
-    seed_history(state)  # 東京已經有 10 天歷史
-    cfg = make_config(destinations=[route(origins=["TPE"]), route(name="大阪", origins=["TPE"], dests=["KIX"])])
-    daily = Daily(cfg, FakeProvider(), state, RawWriter("r1", TODAY), Discord(dry_run=True),
-                  Runner(cfg.runner, sleep=lambda s: None), TODAY, "r1")
-    daily.record_history(daily.collect())
-    note = daily.coverage_note()
-    assert note.startswith("大阪 累積資料中")
-    assert "東京" not in note

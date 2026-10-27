@@ -12,11 +12,10 @@ def test_repo_config_loads():
     cfg = load_config("config.yaml")
     assert not cfg.destinations[0].enabled  # 第一個是說明用的範例
     routes = cfg.routes()
-    assert [r.name for r in routes] == ["北海道", "仙台", "東京", "東京羽田（含松山）"]
+    assert [r.name for r in routes] == ["北海道", "仙台", "東京", "東京羽田（含松山）", "福岡"]
     tokyo = routes[2]
     assert tokyo.dests == ("NRT", "HND") and tokyo.trip_days == (5, 6, 7)
     assert tokyo.query_start <= tokyo.query_end
-    assert tokyo.return_time == (840, 1260)
 
 
 def test_enabled_and_per_route_rules():
@@ -40,7 +39,6 @@ def test_route_defaults_and_date_ranges():
     [r] = cfg.routes()
     assert r.name == "東京・成田、東京・羽田"
     assert r.trip_days == (5, 7)  # 排序、去重
-    assert r.outbound_time is None and r.return_time is None
     assert len(r.legs()) == 8 and ("NRT", "TSA", False) in r.legs()
     # 今天以前的日期不查
     assert r.date_range(True, date(2026, 10, 25)) == (date(2026, 10, 25), date(2027, 2, 28))
@@ -67,8 +65,3 @@ def test_validation_errors(bad):
     with pytest.raises(ValidationError):
         Config.model_validate(bad)
 
-
-@pytest.mark.parametrize("bad", ["6:00-14:00", "06:00~14:00", "25:00-26:00", "06:60-14:00", "早上"])
-def test_time_window_format(bad):
-    with pytest.raises(ValidationError):
-        Config.model_validate({"destinations": [route(outbound_time=bad)]})

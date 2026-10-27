@@ -174,7 +174,7 @@ class Daily:
         return legs
 
     def _leg_day(self, r: Route, origin: str, dest: str, outbound: bool, row) -> LegDay | None:
-        flights = rules.matching([Flight.from_dict(d) for d in json.loads(row["flights_json"])], r, outbound)
+        flights = rules.matching([Flight.from_dict(d) for d in json.loads(row["flights_json"])], r)
         if not flights:
             return None
         day = date.fromisoformat(row["depart_date"])
@@ -199,27 +199,8 @@ class Daily:
 
     # ---------- 通知 ----------
 
-    def coverage_note(self) -> str | None:
-        """剛開始執行（或剛新增航線）的幾天，提醒還在累積資料。各航線分開計算。"""
-        routes = self.cfg.routes()
-        warmup: list[tuple[Route, date]] = []
-        for r in routes:
-            start = self.state.history_start(r.id) or self.today
-            if (self.today - start).days < self.cfg.alerts.warmup_days:
-                warmup.append((r, start + timedelta(days=self.cfg.alerts.warmup_days)))
-
-        def names(rs: list[Route]) -> str:
-            return "" if len(rs) == len(routes) else "、".join(r.name for r in rs) + " "
-
-        notes = []
-        if warmup:
-            until = max(d for _, d in warmup)
-            notes.append(f"{names([r for r, _ in warmup])}累積資料中：{until.month}/{until.day} 前只有「Google 偏低」會觸發")
-        return "；".join(notes) or None
-
     def notify(self, legs: list[LegDay]) -> None:
-        self.discord.send(embeds=[alert_fmt.build_summary(legs, self.cfg.routes(), self.today, self.cfg.report.url,
-                                                          self.coverage_note())])
+        self.discord.send(embeds=alert_fmt.build_summary(legs, self.cfg.routes(), self.today, self.cfg.report.url))
 
     # ---------- 健康檢查 ----------
 
@@ -231,7 +212,8 @@ class Daily:
             warnings.append(f"本次查詢失敗率 {rate:.0%}（可能被 Google 擋了，或介面改版）")
         if stats.aborted:
             warnings.append(f"連續失敗 {self.cfg.runner.abort_after_consecutive_failures} 次，已提前結束")
-        if stats.total("ok") + stats.total("empty") == 0:
+        # 沒有要查的日期（航線全部停用或日期都過了）就不算異常
+        if self.report.scan_tasks and stats.total("ok") + stats.total("empty") == 0:
             last = self.state.last_success()
             days = self.cfg.health.max_days_without_success
             if last is None or datetime.now(timezone.utc) - last >= timedelta(days=days):

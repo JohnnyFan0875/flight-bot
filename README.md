@@ -26,8 +26,6 @@
   dests: [NRT, HND]                # 目的地，可多個
   query_start: 2026-10-01          # 去程出發日範圍，範圍內每天都查（今天以前略過）
   query_end: 2027-02-28            # 回程查到 query_end + trip_days 最長的天數
-  outbound_time: "06:00-14:00"     # 去程出發時段（當地時間），any = 不限
-  return_time: "14:00-21:00"       # 回程出發時段
   trip_days: [5, 6, 7]             # 網頁上配對去回程用的天數
   max_stops: 0                     # 最多轉機次數
   max_total_duration_h: null       # 單程總時間上限（小時），null = 不限

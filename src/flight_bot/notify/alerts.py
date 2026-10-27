@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 from ..config import Route
 from ..pricing import TRIGGER_ORDER
 
 if TYPE_CHECKING:
-    from ..daily import LegDay
+    from ..daily import FlightItem, LegDay
 
 COLORS = {
     "new_low": 0x2ECC71,  # 綠
@@ -19,7 +19,6 @@ COLORS = {
 }
 NO_ALERT_COLOR = 0x95A5A6
 WEEKDAYS = "一二三四五六日"
-TRIGGER_NAMES = {"new_low": "新低", "below_median": "低於中位數", "google_low": "Google 偏低", "max_price": "低於設定"}
 
 
 def money(n: int | float) -> str:
@@ -30,57 +29,71 @@ def short_date(d) -> str:
     return f"{d.month}/{d.day}（{WEEKDAYS[d.weekday()]}）"
 
 
-def fmt_window(window: tuple[int, int] | None) -> str:
-    if window is None:
-        return "不限"
-    (h1, m1), (h2, m2) = divmod(window[0], 60), divmod(window[1], 60)
-    return f"{h1:02d}:{m1:02d}–{h2:02d}:{m2:02d}"
+NOON = 12  # 起飛時間 12:00 以前算上午，之後算下午
 
 
-def _cheapest_line(label: str, legs: list[LegDay]) -> str:
-    if not legs:
-        return f"{label} —"
-    best = min(legs, key=lambda leg: (leg.cheapest.price, leg.day))
-    hits = sum(len(leg.hits) for leg in legs)
-    return (f"{label} {money(best.cheapest.price)} 起（{short_date(best.day)} {best.origin}→{best.dest}）"
-            + (f" ・ 符合 {hits} 班" if hits else ""))
+def _week_start(d: date) -> date:
+    return d - timedelta(days=d.weekday())
 
 
-def build_summary(legs: list[LegDay], routes: list[Route], run_date: date, url: str | None,
-                  coverage_note: str | None = None) -> dict:
-    """每日總結：每條航線去程、回程各一行最低單程價和符合條件的班數，完整列表看網頁報告。"""
+def _low(items: list[FlightItem]) -> str:
+    """最便宜的價格，靠右對齊成固定寬度（放在 code block 裡用等寬字型對齊）。"""
+    return (f"{min(f.price for f in items):,}" if items else "-").rjust(6)
+
+
+def _direction(items: list[FlightItem]) -> str:
+    """上午 / 下午起飛最便宜的價格。"""
+    am = [f for f in items if f.flight.depart_at.hour < NOON]
+    pm = [f for f in items if f.flight.depart_at.hour >= NOON]
+    return f"{_low(am)} / {_low(pm)}"
+
+
+def _week_label(start: date) -> str:
+    end = start + timedelta(days=6)
+    return f"{start.month}/{start.day}–" + (f"{end.day}" if end.month == start.month else f"{end.month}/{end.day}")
+
+
+def _route_embed(r: Route, legs: list[LegDay]) -> dict:
+    """一條航線：依出發日期分週，每週三行：週次、去程、回程，各列上午 / 下午起飛最便宜的價格。"""
+    weeks: dict[date, list[LegDay]] = {}
+    for leg in legs:
+        weeks.setdefault(_week_start(leg.day), []).append(leg)
+    lines = []
+    for start in sorted(weeks):
+        out = [f for leg in weeks[start] if leg.outbound for f in leg.flights]
+        back = [f for leg in weeks[start] if not leg.outbound for f in leg.flights]
+        lines += [_week_label(start), f"  去 {_direction(out)}", f"  回 {_direction(back)}"]
+    hits = [f for leg in legs for f in leg.hits]
+    tops = [min(f.evaluation.triggers, key=TRIGGER_ORDER.index) for f in hits]
+    return {
+        "title": f"{r.name}" + (f"（符合 {len(hits)} 班）" if hits else ""),
+        "description": "```\n" + "\n".join(lines) + "\n```" if lines else "沒有航班資料",
+        "color": COLORS[min(tops, key=TRIGGER_ORDER.index)] if tops else NO_ALERT_COLOR,
+    }
+
+
+def build_summary(legs: list[LegDay], routes: list[Route], run_date: date, url: str | None) -> list[dict]:
+    """每日總結：第一個 embed 是符合條件的班數，之後每條航線一個 embed，列出每週上午、下午最低價。"""
     hits = [(leg, f) for leg in legs for f in leg.hits]
-    counts = {t: sum(1 for _, f in hits if t in f.evaluation.triggers) for t in TRIGGER_ORDER}
     new = sum(1 for _, f in hits if f.status == "new")
     down = sum(1 for _, f in hits if f.status == "down")
 
     lines = []
     if hits:
-        detail = "、".join(f"{TRIGGER_NAMES[t]} {n}" for t, n in counts.items() if n)
         lines.append(f"符合條件的單程航班 **{len(hits)}** 班，新出現 {new} 班、降價 {down} 班")
-        lines.append(f"（{detail}）")
     else:
         lines.append("今天沒有符合條件的航班")
-    lines.append("")
-
-    for r in routes:
-        mine = [leg for leg in legs if leg.route.id == r.id]
-        lines.append(f"**{r.name}**")
-        lines.append(_cheapest_line("　去程", [leg for leg in mine if leg.outbound]))
-        lines.append(_cheapest_line("　回程", [leg for leg in mine if not leg.outbound]))
-
-    if coverage_note:
-        lines += ["", coverage_note]
+    lines.append("各航線每週最低單程價格（TWD）：上午 / 下午 起飛")
     if url:
         lines += ["", f"[開啟完整報告]({url})"]
 
     tops = [min(f.evaluation.triggers, key=TRIGGER_ORDER.index) for _, f in hits]
     color = COLORS[min(tops, key=TRIGGER_ORDER.index)] if tops else NO_ALERT_COLOR
-    embed = {
+    head = {
         "title": f"每日報告 {run_date.month}/{run_date.day}（{WEEKDAYS[run_date.weekday()]}）",
         "description": "\n".join(lines),
         "color": color,
     }
     if url:
-        embed["url"] = url
-    return embed
+        head["url"] = url
+    return [head] + [_route_embed(r, [leg for leg in legs if leg.route.id == r.id]) for r in routes]

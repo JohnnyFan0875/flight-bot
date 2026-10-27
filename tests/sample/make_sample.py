@@ -32,8 +32,8 @@ FINISHED = STARTED + timedelta(minutes=19, seconds=24)
 RUN_ID = "20261024T190002Z-a1b2c3"
 
 # 範例用的固定設定，不讀 config.yaml，避免改目的地時範例跟著變
-ROUTE = {"query_start": "2026-10-01", "query_end": "2027-02-28", "outbound_time": "06:00-14:00",
-         "return_time": "14:00-21:00", "trip_days": [5, 6, 7], "max_stops": 0}
+ROUTE = {"query_start": "2026-10-01", "query_end": "2027-02-28",
+         "trip_days": [5, 6, 7], "max_stops": 0}
 CONFIG = {
     "runner": {"delay_seconds": [0, 0], "retries": 0},
     "report": {"url": "https://johnnyfan0875.github.io/flight-bot/"},
@@ -135,7 +135,7 @@ def build_sample_html() -> str:
     daily = _run(cfg, state, TODAY, RUN_ID)
 
     data = build_data(cfg, daily.report, daily.runner.stats, RUN_ID, TODAY, STARTED, FINISHED,
-                      daily.coverage_note(), [(TODAY - timedelta(days=i)).isoformat() for i in (2, 1, 0)])
+                      [(TODAY - timedelta(days=i)).isoformat() for i in (2, 1, 0)])
     return render(data)
 
 
