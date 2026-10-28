@@ -294,7 +294,8 @@ td.price { line-height: 1.3; }
   // ---------- 篩選選項 ----------
   const uniq = (xs) => [...new Set(xs)];
   const opts = (all, pairs) => `<option value="">${all}</option>` + pairs.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
-  const months = uniq(LEGS.map((l) => l.month)).sort();
+  // 出發月份只看去程日；回程跟著配對到的去程（月底出發、隔月回來的回程也會列出）
+  const months = uniq(LEGS.filter((l) => l.out).map((l) => l.month)).sort();
   // 折線圖的每一週：從最早到最晚連續列出，沒有資料的週斷開
   const weeks = [];
   if (LEGS.length) {
@@ -309,7 +310,7 @@ td.price { line-height: 1.3; }
     return [v, `${place(o)} ${o} ⇄ ${place(d)} ${d}`];
   }));
   // 這次查詢的日期區間：最早的去程日（今天以前不查）到最晚的回程日；日期都過了的航線不算
-  const lastDay = (x) => addDays(x.range[1], Math.max(...x.days));
+  const lastDay = (x) => addDays(x.range[1], Math.max(...x.days) - 1);
   const active = R.filter((x) => lastDay(x) >= r.date);
   const rangeStart = active.map((x) => x.range[0]).sort()[0];
   const rangeEnd = active.map(lastDay).sort().pop();
@@ -341,6 +342,9 @@ td.price { line-height: 1.3; }
   const legIndex = new Map(LEGS.map((l) => [`${l.r}|${l.o}|${l.d}|${l.date}`, l]));
   // 沒選天數 = 各航線自己設定的天數；選了就只用這個天數（航線沒設定這個天數就不配對）
   const daysFor = (route) => state.day ? (route.days.includes(+state.day) ? [+state.day] : []) : route.days;
+  // 天數含去程當天：7 天 = 週三去、下週二回，回程日是去程日 + 6
+  const tripEnd = (iso, n, out) => addDays(iso, out ? n - 1 : 1 - n);
+  const monthOk = (l) => !state.month || !l.out || l.month === state.month;
 
   // ---------- 狀態 ----------
   const statusOk = (st, want) => want === "changed" ? st === "new" || st === "down" : st === want;
@@ -358,11 +362,11 @@ td.price { line-height: 1.3; }
     const [tw] = selectedPair();
     let best = null;
     daysFor(route).forEach((n) => {
-      const day = addDays(l.date, l.out ? n : -n);
+      const day = tripEnd(l.date, n, l.out);
       route.origins.forEach((o) => {
         if (tw && o !== tw) return;
         const p = legIndex.get(l.out ? `${l.r}|${l.d}|${o}|${day}` : `${l.r}|${o}|${l.o}|${day}`);
-        const f = p && pick(p);
+        const f = p && monthOk(p) && pick(p);
         if (f && (best == null || f.price < best)) best = f.price;
       });
     });
@@ -386,7 +390,7 @@ td.price { line-height: 1.3; }
     picked.items.forEach(({ l }, p) => {
       const route = R[l.r];
       daysFor(route).forEach((n) => {
-        const day = addDays(l.date, picked.out ? n : -n);
+        const day = tripEnd(l.date, n, picked.out);
         route.origins.forEach((o) => {
           if (tw && o !== tw) return;
           const key = picked.out ? `${l.d}|${o}|${day}` : `${o}|${l.o}|${day}`;
@@ -413,7 +417,7 @@ td.price { line-height: 1.3; }
     const only = picked && picked.out !== out ? pickedPartners() : null;
     const sideOk = sideFilter(out);
     LEGS.forEach((l) => {
-      if (l.out !== out || (tw && (l.tw !== tw || l.jp !== jp)) || (state.month && l.month !== state.month)) return;
+      if (l.out !== out || (tw && (l.tw !== tw || l.jp !== jp)) || !monthOk(l)) return;
       const withs = only ? only.get(`${l.o}|${l.d}|${l.date}`) : null;
       if (only && !withs) return;
       // 有點選時，另一程的價格是配得到的點選航班中最便宜的；沒有時用配得到的最便宜另一程
@@ -531,7 +535,7 @@ td.price { line-height: 1.3; }
     el.hidden = !picked;
     $("split").classList.toggle("picked", !!picked);
     if (!picked) { el.innerHTML = ""; return; }
-    const between = (a, b) => Math.round(Math.abs(Date.parse(b) - Date.parse(a)) / 864e5);
+    const between = (a, b) => Math.round(Math.abs(Date.parse(b) - Date.parse(a)) / 864e5) + 1;  // 含去程當天
     const pairs = partners.map(({ l, f, withs }) => {
       const mates = withs.map((p) => picked.items[p]);
       return {

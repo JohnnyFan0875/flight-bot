@@ -10,12 +10,12 @@ TODAY = date(2026, 10, 24)
 
 def test_every_day_in_range():
     cfg = make_config(destinations=[route(origins=["TPE"], query_start="2026-12-01", query_end="2026-12-10",
-                                          trip_days=[3, 5])])
+                                          trip_days=[3, 5])])  # 回程 12/1 + 2 到 12/10 + 4
     tasks = planner.per_date_tasks(cfg, TODAY)
     out = sorted(t.depart for t in tasks if t.origin == "TPE")
     back = sorted(t.depart for t in tasks if t.origin == "NRT")
     assert out[0] == date(2026, 12, 1) and out[-1] == date(2026, 12, 10) and len(out) == 10
-    assert back[0] == date(2026, 12, 4) and back[-1] == date(2026, 12, 15) and len(back) == 12
+    assert back[0] == date(2026, 12, 3) and back[-1] == date(2026, 12, 14) and len(back) == 12
 
 
 def test_past_dates_skipped():

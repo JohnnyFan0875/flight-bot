@@ -40,7 +40,7 @@ class RouteConfig(Strict):
     dests: list[str]
     query_start: date  # 去程出發日的範圍（含兩端），範圍內每天都查
     query_end: date
-    trip_days: list[int]  # 網頁配對去回程時使用的天數，例如 [5, 6, 7]
+    trip_days: list[int]  # 網頁配對去回程時使用的天數（含去程當天），例如 [5, 6, 7]
     max_stops: int = Field(default=0, ge=0, le=2)  # 最多轉機次數，0 = 只要直飛
     max_total_duration_h: float | None = Field(default=None, gt=0)  # 單程總飛行時間上限（含轉機）
     max_layover_h: float | None = Field(default=None, gt=0)  # 每次轉機最長等待時間
@@ -186,10 +186,11 @@ class Route:
 
     def date_range(self, outbound: bool, today: date) -> tuple[date, date]:
         """要查的日期（含兩端）：去程是 query_start 到 query_end，回程再加上最短到最長的天數。
+        天數含去程當天（7 天 = 週三去、下週二回），所以回程日是去程日 + N - 1。
         今天以前的日期不查，所以 start 可能晚於 end（這時沒有要查的日期）。"""
         start, end = self.query_start, self.query_end
         if not outbound:
-            start, end = start + timedelta(days=self.trip_days[0]), end + timedelta(days=self.trip_days[-1])
+            start, end = start + timedelta(days=self.trip_days[0] - 1), end + timedelta(days=self.trip_days[-1] - 1)
         return max(start, today), end
 
 

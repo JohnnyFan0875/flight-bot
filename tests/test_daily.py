@@ -86,11 +86,8 @@ def test_cheap_day_triggers_on_one_way_price():
     assert leg.outbound and f.price == 1500
     assert f.evaluation.triggers == ["new_low", "below_median", "google_low"]
     assert leg.flights[1].price == 3400 and not leg.flights[1].evaluation.hit  # 同一天較貴的班次不算
-    [summary, tokyo] = [e for m in discord.sent for e in m["payload"]["embeds"]]
+    [summary] = [e for m in discord.sent for e in m["payload"]["embeds"]]
     assert summary["title"].startswith("每日報告") and "符合條件的單程航班 **1** 班" in summary["description"]
-    assert tokyo["title"] == "東京（符合 1 班）"
-    # 12/8 是星期二，那一週去程上午最便宜的是 1,500
-    assert "\n12/7–13\n  去  1,500 / " in tokyo["description"]
 
     # 隔天價格不變：狀態是持平
     report2 = make_daily(FakeProvider(cheap_day=cheap), state, today=TODAY + timedelta(days=1)).run()
@@ -228,9 +225,7 @@ def test_report_html_renders():
 def test_summary_when_nothing_qualifies():
     from flight_bot.notify.alerts import build_summary
 
-    cfg = make_config()
-    embed, route_embed = build_summary([], cfg.routes(), TODAY, "https://example.com/")
-    assert route_embed["description"] == "沒有航班資料"
+    [embed] = build_summary([], TODAY, "https://example.com/")
     assert "今天沒有符合條件的航班" in embed["description"]
     assert "[開啟完整報告](https://example.com/)" in embed["description"]
     assert embed["url"] == "https://example.com/"

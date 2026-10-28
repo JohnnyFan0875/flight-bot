@@ -31,8 +31,8 @@ destinations:
     dests: [LHR]             # 目的地，可多個，例如 [NRT, HND]
     query_start: 2026-12-01  # 去程出發日範圍的第一天（今天以前的日期自動略過）
     query_end: 2027-02-28    # 去程出發日範圍的最後一天；範圍內每天都查
-                             # 回程查 query_start + trip_days 最短天數 到 query_end + 最長天數
-    trip_days: [10, 12, 14]  # 網頁上配對去回程用的天數（去程日 + N 天）
+                             # 回程查 query_start + (最短天數 - 1) 到 query_end + (最長天數 - 1)
+    trip_days: [10, 12, 14]  # 網頁上配對去回程用的天數，含去程當天（7 天 = 週三去、下週二回）
     max_stops: 1             # 最多轉機次數，0 = 只要直飛
     max_total_duration_h: 24 # 單程總時間上限（小時，含轉機等待）；null = 不限
     max_layover_h: 6         # 每次轉機最長等多久（小時）；null = 不限

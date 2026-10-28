@@ -200,7 +200,7 @@ class Daily:
     # ---------- 通知 ----------
 
     def notify(self, legs: list[LegDay]) -> None:
-        self.discord.send(embeds=alert_fmt.build_summary(legs, self.cfg.routes(), self.today, self.cfg.report.url))
+        self.discord.send(embeds=alert_fmt.build_summary(legs, self.today, self.cfg.report.url))
 
     # ---------- 健康檢查 ----------
 

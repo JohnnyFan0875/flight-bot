@@ -42,7 +42,7 @@ def test_route_defaults_and_date_ranges():
     assert len(r.legs()) == 8 and ("NRT", "TSA", False) in r.legs()
     # 今天以前的日期不查
     assert r.date_range(True, date(2026, 10, 25)) == (date(2026, 10, 25), date(2027, 2, 28))
-    assert r.date_range(False, date(2026, 9, 1)) == (date(2026, 10, 6), date(2027, 3, 7))
+    assert r.date_range(False, date(2026, 9, 1)) == (date(2026, 10, 5), date(2027, 3, 6))
 
 
 @pytest.mark.parametrize("bad", [

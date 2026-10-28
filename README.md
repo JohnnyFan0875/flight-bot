@@ -25,8 +25,8 @@
   origins: [TPE]                   # 出發地，可多個
   dests: [NRT, HND]                # 目的地，可多個
   query_start: 2026-10-01          # 去程出發日範圍，範圍內每天都查（今天以前略過）
-  query_end: 2027-02-28            # 回程查到 query_end + trip_days 最長的天數
-  trip_days: [5, 6, 7]             # 網頁上配對去回程用的天數
+  query_end: 2027-02-28            # 回程查到 query_end + (trip_days 最長天數 - 1)
+  trip_days: [5, 6, 7]             # 網頁上配對去回程用的天數，含去程當天（7 天 = 週三去、下週二回）
   max_stops: 0                     # 最多轉機次數
   max_total_duration_h: null       # 單程總時間上限（小時），null = 不限
   max_layover_h: null              # 每次轉機最長等待（小時）
