@@ -79,19 +79,50 @@ button { cursor: pointer; }
 .card :is(.row2, .row3) > :last-child { white-space: nowrap; }
 .nw { white-space: nowrap; }
 .more { margin-top: 12px; padding: 8px; text-align: center; }
-/* 查詢區間：出發地 ⇄ 目的地下方 */
-.f-range { flex-basis: 100%; }
-@media (min-width: 1100px) { .f-range { order: 2; } }
+/* 出發地 ⇄ 目的地和查詢區間同一行 */
+.f-row1 { display: flex; gap: 12px; align-items: center; flex-basis: 100%; min-width: 0; }
 
 /* 單程航班：左去程、右回程 */
-.filters input#f-price { width: 150px; }
 .split { display: grid; gap: 16px; }
 .split > section { min-width: 0; }
 .split h3 { font-size: 15px; margin: 4px 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.split h3 input, .split h3 select { font-size: 13px; font-weight: normal; padding: 3px 8px; }
-.split h3 input.sf-q { width: 150px; }
-.split h3 .sf-time { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: normal; color: var(--muted); }
+/* 排序、篩選、清除篩選三個一樣高 */
+.split h3 .hctl { height: 32px; padding: 0 10px; font-size: 14px; font-weight: normal; line-height: 30px; }
+.split h3 .sf-open.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.split h3 .sf-reset { margin-left: auto; }
 .split h3 small { color: var(--muted); font-weight: normal; font-size: 13px; }
+
+/* 篩選字卡 */
+body.modal-open { overflow: hidden; }
+.modal { position: fixed; inset: 0; z-index: 10; background: rgba(15, 20, 30, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: 12px; }
+.sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: 100%; max-width: 460px;
+  padding: 12px; display: grid; gap: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25); }
+.sheet-head { display: flex; gap: 8px; align-items: center; }
+.ftabs { display: flex; flex: 1; gap: 6px; }
+.ftabs button { flex: 1; padding: 6px 8px; font-weight: 600; }
+.ftabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sheet .close { width: 34px; height: 34px; padding: 0; flex-shrink: 0; }
+.frow { display: flex; gap: 8px; align-items: center; }
+.frow > * { flex: 1 1 0; min-width: 0; }
+.sheet select, .sheet #fm-price, .ms-btn { height: 36px; padding: 0 8px; font-size: 14px; width: 100%; }
+.ftime { display: flex; align-items: center; gap: 4px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.sheet .ftime select { flex: 1; min-width: 0; padding: 0 4px; }
+.frow.fend { justify-content: flex-end; }
+.frow.fend > * { flex: 0 0 auto; }
+#fm-count { margin-right: auto; }
+/* 多選選單 */
+.ms { position: relative; }
+.ms-btn { display: flex; align-items: center; gap: 4px; text-align: left; }
+.ms-btn span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-btn::after { content: "▾"; color: var(--muted); font-size: 12px; }
+.ms-list { position: absolute; left: 0; top: calc(100% + 4px); z-index: 3; min-width: 100%; overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 0; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); }
+.ms-list.up { top: auto; bottom: calc(100% + 4px); }
+.ms-list label { display: flex; gap: 8px; align-items: center; padding: 6px 10px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.ms-list label:hover { background: var(--accent-soft); }
+.ms-list input { margin: 0; padding: 0; }
+.ms-list .grp { font-size: 12px; color: var(--muted); padding: 6px 10px 2px; }
 .split th, .split td { padding: 8px 7px; font-size: 14px; }
 .split th:first-child, .split td:first-child { padding-left: 14px; }
 .split td.price { font-size: 15px; }
@@ -116,26 +147,17 @@ header.top .wrap > div { flex: 1; }
 /* 每一組配對一個顏色：點選的那班 → 第 N 班 → 第 N 組總額，同一條路線同色 */
 .links path { fill: none; stroke: currentColor; stroke-width: 1.6; opacity: 0.75; }
 .links circle { fill: currentColor; }
-.filters #f-reset { margin-left: auto; }
 @media (min-width: 1100px) {
   .split { grid-template-columns: 1fr 1fr; }
   .split.picked { grid-template-columns: 1fr 1fr minmax(170px, 0.36fr); }
   .split.picked th, .split.picked td { padding: 8px 5px; }
   .split.picked th:first-child, .split.picked td:first-child { padding-left: 12px; }
   .seg, .picked-sum, .pair-total { display: none !important; }
-  /* 寬螢幕篩選列排成一行，清除篩選在最右邊 */
-  .f-row1, .f-row2 { display: contents; }
-  #f-reset { order: 1; }
 }
 @media (max-width: 1099px) {
-  /* min-width: 0：不然出發地選單的內容寬度會把這一行撐出框外 */
-  .f-row1 { display: flex; gap: 8px; flex-basis: 100%; min-width: 0; }
+  /* 出發地選單佔滿剩下的寬度（min-width: 0：不然選單的內容寬度會把這一行撐出框外），查詢區間固定一行 */
   .f-row1 #f-pair { flex: 1; min-width: 0; }
-  /* 其他篩選排成一行，放不下就左右拖移；手機寬度剛好完整放下前三個，不會有被切一半的欄位 */
-  .f-row2 { display: flex; gap: 6px; flex-basis: 100%; overflow-x: auto; scrollbar-width: none; }
-  .filters .f-row2 input#f-price { width: 102px; }
-  .f-row2::-webkit-scrollbar { display: none; }
-  .f-row2 > * { flex-shrink: 0; }
+  .f-range { flex-shrink: 0; white-space: nowrap; }
 }
 /* 窄螢幕：上方分頁切換航班和折線圖；航班的去程、回程也分頁切換（按鈕或左右滑動），總額直接寫在另一邊的卡片上 */
 .seg { display: flex; flex-basis: 100%; gap: 6px; }
@@ -150,17 +172,10 @@ header.top .wrap > div { flex: 1; }
 @media (max-width: 1099px) {
   .split[data-view="out"] #side-back, .split[data-view="back"] #side-out, #side-total { display: none; }
   main[data-page="flights"] #page-chart, main[data-page="chart"] #split, main[data-page="chart"] #tabs { display: none; }
-  /* 折線圖只跟著出發地和直飛／轉機篩選 */
-  main[data-page="chart"] :is(#f-month, #f-day, #f-price, #f-status) { display: none; }
   main[data-page="chart"] .chart-head { margin-top: 0; }
-  /* 分頁已經寫了去程／回程和班數，標題列只留航班和起飛時間篩選，排成一行 */
+  /* 分頁已經寫了去程／回程和班數，標題列只留排序、篩選、清除篩選 */
   .split h3 { flex-wrap: nowrap; }
   .split h3 .lbl, .split h3 .count { display: none; }
-  .split h3 input.sf-q { flex: 1 1 0; min-width: 0; width: auto; }
-  .split h3 .sf-time, .split h3 .sf-sort { flex-shrink: 0; }
-  /* 排序和起飛時間都要擠在同一行：縮小間距和選單 */
-  .split h3 { gap: 6px; }
-  .split h3 select { padding: 3px 4px; }
 }
 
 /* 電腦：表格 */
@@ -235,15 +250,7 @@ td.price { line-height: 1.3; }
   <div class="filters">
     <div class="f-row1">
       <select id="f-pair" aria-label="出發地與目的地"></select>
-      <button id="f-reset" type="button">清除篩選</button>
-    </div>
-    <div class="sub f-range" id="range"></div>
-    <div class="f-row2">
-      <select id="f-month" aria-label="出發月份"></select>
-      <select id="f-day" aria-label="天數"></select>
-      <input id="f-price" type="number" min="0" step="500" placeholder="來回總額上限" aria-label="來回總額上限">
-      <select id="f-stops" aria-label="直飛或轉機"></select>
-      <select id="f-status" aria-label="狀態"></select>
+      <div class="sub f-range" id="range"></div>
     </div>
     <div class="seg tabs" id="tabs">
       <button type="button" data-view="out">去程 <small></small></button>
@@ -274,6 +281,41 @@ td.price { line-height: 1.3; }
   </div>
 
 </main>
+
+<!-- 篩選字卡：去程、回程各自的篩選 -->
+<div class="modal" id="fmodal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="篩選">
+    <div class="sheet-head">
+      <div class="ftabs" id="ftabs">
+        <button type="button" data-side="out">去程</button>
+        <button type="button" data-side="back">回程</button>
+      </div>
+      <button type="button" class="close" id="fm-close" aria-label="關閉">✕</button>
+    </div>
+    <div class="frow">
+      <select id="fm-month" aria-label="出發月份"></select>
+      <div class="ms" id="fm-wd"></div>
+    </div>
+    <div class="frow">
+      <select id="fm-day" aria-label="天數"></select>
+      <select id="fm-stops" aria-label="直飛或轉機"></select>
+    </div>
+    <div class="frow">
+      <div class="ms" id="fm-q"></div>
+      <span class="ftime">起飛
+        <select id="fm-from" aria-label="最早起飛時間"></select>～<select id="fm-to" aria-label="最晚起飛時間"></select>
+      </span>
+    </div>
+    <div class="frow">
+      <input id="fm-price" type="number" inputmode="numeric" min="0" step="500" placeholder="金額上限" aria-label="單程金額上限">
+      <select id="fm-status" aria-label="狀態"></select>
+    </div>
+    <div class="frow fend">
+      <span class="muted small" id="fm-count"></span>
+      <button type="button" id="fm-reset">清除篩選</button>
+    </div>
+  </div>
+</div>
 
 <script id="data" type="application/json">__DATA__</script>
 <script>
@@ -306,23 +348,27 @@ td.price { line-height: 1.3; }
     set(k, v) { try { localStorage.setItem("fb2:" + k, JSON.stringify(v)); } catch (e) { /* 無痕模式等情況 */ } },
   };
   const PAGE = 10;
-  const EMPTY = { pair: "", day: "", stops: "", month: "", status: "", price: "" };
   const SORT0 = { key: "price", dir: 1 };
-  const state = { ...EMPTY };
-  Object.keys(EMPTY).forEach((k) => { const v = (store.get("filters") || {})[k]; if (typeof v === "string") state[k] = v; });
+  // 上方只剩出發地 ⇄ 目的地，兩邊共用
+  const state = { pair: "" };
+  { const v = (store.get("filters") || {}).pair; if (typeof v === "string") state.pair = v; }
   // 單程航班兩個表格各自的排序；不記住，每次打開都從價格遞增開始
   const sides = { out: { sort: { ...SORT0 }, shown: PAGE }, back: { sort: { ...SORT0 }, shown: PAGE } };
-  // 兩個表格各自的航班名稱、起飛時間篩選；和上方篩選一樣記住
-  const SIDE0 = { q: "", from: "", to: "" };
+  // 去程、回程各自的篩選（篩選字卡）；wd 星期、q 航班或航空公司是多選
+  const SIDE0 = { month: "", wd: [], day: "", stops: "", q: [], from: "", to: "", price: "", status: "" };
+  const WD = ["一", "二", "三", "四", "五", "六", "日"];
   // 起飛時間的選項：每個整點
   const HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}:00`);
   ["out", "back"].forEach((k) => {
-    const saved = (store.get("side-filters") || {})[k] || {};
-    sides[k].filter = { ...SIDE0 };
+    const saved = (store.get("side-filters2") || {})[k] || {};
+    sides[k].filter = { ...SIDE0, wd: [], q: [] };
     Object.keys(SIDE0).forEach((f) => {
-      if (typeof saved[f] === "string" && (f === "q" || HOURS.includes(saved[f]))) sides[k].filter[f] = saved[f];
+      const v = saved[f];
+      if (Array.isArray(SIDE0[f])) { if (Array.isArray(v)) sides[k].filter[f] = v.filter((x) => typeof x === "string"); }
+      else if (typeof v === "string" && (!["from", "to"].includes(f) || HOURS.includes(v))) sides[k].filter[f] = v;
     });
   });
+  const saveSides = () => store.set("side-filters2", { out: sides.out.filter, back: sides.back.filter });
 
   // ---------- 標頭與提示 ----------
   const r = D.run;
@@ -357,8 +403,6 @@ td.price { line-height: 1.3; }
   // ---------- 篩選選項 ----------
   const uniq = (xs) => [...new Set(xs)];
   const opts = (all, pairs) => `<option value="">${all}</option>` + pairs.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
-  // 出發月份只看去程日；回程跟著配對到的去程（月底出發、隔月回來的回程也會列出）
-  const months = uniq(LEGS.filter((l) => l.out).map((l) => l.month)).sort();
   // 折線圖的每一週：從最早到最晚連續列出，沒有資料的週斷開
   const weeks = [];
   if (LEGS.length) {
@@ -376,48 +420,37 @@ td.price { line-height: 1.3; }
     const active = R.filter((x) => lastDay(x) >= r.date && (!tw || (x.origins.includes(tw) && x.dests.includes(jp))));
     const rangeStart = active.map((x) => x.range[0]).sort()[0];
     const rangeEnd = active.map(lastDay).sort().pop();
-    $("range").textContent = active.length
-      ? `查詢區間 ${ymd(rangeStart > r.date ? rangeStart : r.date)} – ${ymd(rangeEnd)}` : "沒有要查的日期";
+    $("range").innerHTML = active.length
+      ? `<span>查詢區間</span> <span class="nw">${ymd(rangeStart > r.date ? rangeStart : r.date)} – ${ymd(rangeEnd)}</span>` : "沒有要查的日期";
   }
-  // 下拉選單的所有選項；實際列出的是配合其他篩選還找得到航班的（refreshOptions）
-  const CHOICES = [
-    ["f-pair", "pair", "全部出發地 ⇄ 目的地", pairs.map((v) => {
-      const [o, d] = v.split("|");
-      return [v, `${place(o)} ${o} ⇄ ${place(d)} ${d}`];
-    })],
-    ["f-month", "month", "全部出發月份", months.map((m) => [m, monthLabel(m)])],
-    ["f-day", "day", "全部天數", allDays.map((n) => [String(n), `${n} 天`])],
-    ["f-stops", "stops", "直飛和轉機", [["direct", "直飛"], ["connect", "轉機"]]],
-    ["f-status", "status", "全部狀態", [["new", "新出現"], ["down", "降價"], ["changed", "新出現或降價"], ["same", "持平"], ["up", "漲價"]]],
-  ];
-
-  const bind = (id, key) => {
-    const el = $(id);
-    el.addEventListener(el.tagName === "INPUT" ? "input" : "change", () => { state[key] = el.value; update(); });
-  };
-  const FIELDS = [["f-pair", "pair"], ["f-day", "day"], ["f-stops", "stops"], ["f-month", "month"],
-    ["f-status", "status"], ["f-price", "price"]];
-  FIELDS.forEach(([id, key]) => bind(id, key));
-  $("f-reset").addEventListener("click", () => {
-    Object.assign(state, EMPTY);
-    sides.out.filter = { ...SIDE0 };
-    sides.back.filter = { ...SIDE0 };
-    update();
+  const PAIR_CHOICES = pairs.map((v) => {
+    const [o, d] = v.split("|");
+    return [v, `${place(o)} ${o} ⇄ ${place(d)} ${d}`];
   });
+  const STATUS_CHOICES = [["new", "新出現"], ["down", "降價"], ["changed", "新出現或降價"], ["same", "持平"], ["up", "漲價"]];
+  $("f-pair").addEventListener("change", () => { state.pair = $("f-pair").value; update(); });
 
-  // ---------- 共用篩選 ----------
+  // ---------- 篩選 ----------
   const selectedPair = () => state.pair ? state.pair.split("|") : [null, null];  // [台灣機場, 日本機場]
-  const stopsOk = (f) => !state.stops || (state.stops === "direct" ? f.stops === 0 : f.stops > 0);
-  const pick = (l) => l.flights.find(stopsOk);  // 當天符合直飛／轉機篩選的最便宜航班
+  const fOf = (out) => sides[out ? "out" : "back"].filter;
   const legIndex = new Map(LEGS.map((l) => [`${l.r}|${l.o}|${l.d}|${l.date}`, l]));
   // 沒選天數 = 各航線自己設定的天數；選了就只用這個天數（航線沒設定這個天數就不配對）
-  const daysFor = (route) => state.day ? (route.days.includes(+state.day) ? [+state.day] : []) : route.days;
+  const daysFor = (route, day) => day ? (route.days.includes(+day) ? [+day] : []) : route.days;
   // 天數含去程當天：7 天 = 週三去、下週二回，回程日是去程日 + 6
   const tripEnd = (iso, n, out) => addDays(iso, out ? n - 1 : 1 - n);
-  const monthOk = (l) => !state.month || !l.out || l.month === state.month;
+  const stopsOk = (st, f) => !st || (st === "direct" ? f.stops === 0 : f.stops > 0);
+  const statusOk = (st, want) => want === "changed" ? st === "new" || st === "down" : st === want;
+  // 一邊的篩選：出發月份、星期看日期；其他看航班。航班或航空公司選了多個時，符合其中一個就列出
+  const legOk = (F, l) => (!F.month || l.month === F.month) && (!F.wd.length || F.wd.includes(l.dow));
+  const flightOk = (F, f) => stopsOk(F.stops, f)
+    && (!F.q.length || F.q.some((v) => f.al.includes(v) || f.nos.includes(v)))
+    && (!F.from || f.dep >= F.from) && (!F.to || f.dep <= F.to)
+    && (!Number(F.price) || f.price <= Number(F.price))
+    && (!F.status || statusOk(f.st, F.status));
+  // 篩選了幾項（篩選按鈕上的數字）
+  const activeCount = (F) => Object.keys(SIDE0).filter((k) => Array.isArray(F[k]) ? F[k].length : F[k]).length;
 
   // ---------- 狀態 ----------
-  const statusOk = (st, want) => want === "changed" ? st === "new" || st === "down" : st === want;
   function statusText(f) {
     if (f.st === "new") return `<span class="s-new">新出現</span>`;
     if (f.st === "down") return `<span class="s-down">降 ${num(f.prev - f.price)}</span>`;
@@ -426,21 +459,19 @@ td.price { line-height: 1.3; }
   }
 
   // ---------- 單程航班：左去程、右回程 ----------
-  // 配得到的另一程（所選天數內）當天最便宜的價格；配不到回傳 null
-  function partnerPrice(l) {
+  // 這一程在這一邊選的天數內，配不配得到符合另一邊篩選的航班
+  function hasPartner(l) {
     const route = R[l.r];
     const [tw] = selectedPair();
-    let best = null;
-    daysFor(route).forEach((n) => {
+    const P = fOf(!l.out);
+    return daysFor(route, fOf(l.out).day).some((n) => {
       const day = tripEnd(l.date, n, l.out);
-      route.origins.forEach((o) => {
-        if (tw && o !== tw) return;
+      return route.origins.some((o) => {
+        if (tw && o !== tw) return false;
         const p = legIndex.get(l.out ? `${l.r}|${l.d}|${o}|${day}` : `${l.r}|${o}|${l.o}|${day}`);
-        const f = p && monthOk(p) && pick(p);
-        if (f && (best == null || f.price < best)) best = f.price;
+        return p && legOk(P, p) && p.flights.some((f) => flightOk(P, f));
       });
     });
-    return best;
   }
   const FLIGHT_COMPARE = {
     pair: (a, b) => `${a.l.o}${a.l.d}`.localeCompare(`${b.l.o}${b.l.d}`),
@@ -453,13 +484,14 @@ td.price { line-height: 1.3; }
   // 點表格的一列選一班；點折線圖的點選那一週所有並列最低價的航班。
   let picked = null;
   const pickedKeys = () => new Set(picked.items.map(({ l, f }) => rowKey(l, f)));
-  // 和點選的航班配得到的另一程：{ "出發|抵達|日期": [點選航班的索引, ...] }，依各自的航線、天數、機場篩選算出
+  // 和點選的航班配得到的另一程：{ "出發|抵達|日期": [點選航班的索引, ...] }，依各自的航線、另一邊選的天數、機場篩選算出
   function pickedPartners() {
     const [tw] = selectedPair();
     const map = new Map();
+    const day = fOf(!picked.out).day;
     picked.items.forEach(({ l }, p) => {
       const route = R[l.r];
-      daysFor(route).forEach((n) => {
+      daysFor(route, day).forEach((n) => {
         const day = tripEnd(l.date, n, picked.out);
         route.origins.forEach((o) => {
           if (tw && o !== tw) return;
@@ -471,37 +503,25 @@ td.price { line-height: 1.3; }
     });
     return map;
   }
-  // 表格標題旁的篩選：航班號碼或航空公司（不分大小寫、忽略空白）、起飛時間範圍
-  const squash = (t) => t.toLowerCase().replace(/\s+/g, "");
-  function sideFilter(out) {
-    const { q, from, to } = sides[out ? "out" : "back"].filter;
-    const want = squash(q);
-    return (f) => (!want || squash(f.nos.join(" ") + " " + f.al.join(" ")).includes(want))
-      && (!from || f.dep >= from) && (!to || f.dep <= to);
-  }
   // limit：找到這麼多班就停（只想知道有沒有的時候用 1）；nopick：不管點選的航班，只看篩選條件
   function filteredFlights(out, { limit = Infinity, nopick = false } = {}) {
-    const max = Number(state.price) || 0;
     const list = [];
     const seen = new Set();
     const [tw, jp] = selectedPair();
     const only = !nopick && picked && picked.out !== out ? pickedPartners() : null;
-    const sideOk = sideFilter(out);
+    const F = fOf(out);
     for (const l of LEGS) {
-      if (l.out !== out || (tw && (l.tw !== tw || l.jp !== jp)) || !monthOk(l)) continue;
+      if (l.out !== out || (tw && (l.tw !== tw || l.jp !== jp)) || !legOk(F, l)) continue;
       const withs = only ? only.get(`${l.o}|${l.d}|${l.date}`) : null;
       if (only && !withs) continue;
-      // 有點選時，另一程的價格是配得到的點選航班中最便宜的；沒有時用配得到的最便宜另一程
-      const partner = withs ? Math.min(...withs.map((p) => picked.items[p].f.price)) : partnerPrice(l);
-      if (partner == null) continue;
-      for (const [k, f] of l.flights.entries()) {
-        if (!stopsOk(f) || !sideOk(f) || (max && f.price + partner > max) || (state.status && !statusOk(f.st, state.status))) continue;
+      const fs = l.flights.filter((f) => flightOk(F, f));
+      // 沒有點選時，只列出配得到另一程的
+      if (!fs.length || (!withs && !hasPartner(l))) continue;
+      for (const f of fs) {
         const key = rowKey(l, f);
         if (seen.has(key)) continue;  // 多條航線共用的航班只列一次
         seen.add(key);
-        // 有總額上限時，只和不超過上限的點選航班配對
-        const ok = withs ? withs.filter((p) => !max || f.price + picked.items[p].f.price <= max) : null;
-        list.push({ l, f, k, withs: ok });
+        list.push({ l, f, k: l.flights.indexOf(f), withs });
         if (list.length >= limit) return list;
       }
     }
@@ -512,41 +532,152 @@ td.price { line-height: 1.3; }
 
   // ---------- 篩選選項：只列出配合其他篩選條件還找得到航班的選項（目前選的值一定列出） ----------
   const anyFlight = () => [true, false].some((out) => filteredFlights(out, { limit: 1, nopick: true }).length > 0);
-  function withFilters(patch, fn) {
-    const saved = { ...state };
-    Object.assign(state, patch);
-    try { return fn(); } finally { Object.assign(state, saved); }
+  function withPair(pair, fn) {
+    const saved = state.pair;
+    state.pair = pair;
+    try { return fn(); } finally { state.pair = saved; }
   }
+  // 暫時改掉一邊的某個篩選，算出那時列得出的航班
+  function withSide(k, patch, fn) {
+    const saved = sides[k].filter;
+    sides[k].filter = { ...saved, ...patch };
+    try { return fn(); } finally { sides[k].filter = saved; }
+  }
+  // 拿掉自己這一項篩選後還列得出的航班；點選了另一邊的航班時，只算配得到的
+  const facet = (k, key) => withSide(k, { [key]: SIDE0[key] }, () => filteredFlights(k === "out"));
   // 起飛時間：最早的選項到最晚的選項涵蓋這一邊所有航班（自己的最早／最晚不算進篩選）
   const floorHour = (t) => `${t.slice(0, 2)}:00`;
   const ceilHour = (t) => t.endsWith(":00") ? t : `${String(+t.slice(0, 2) + 1).padStart(2, "0")}:00`;
   function hourChoices(k, key) {
-    const side = sides[k], saved = side.filter;
-    side.filter = { ...saved, [key]: "" };
-    let deps;
-    try { deps = filteredFlights(k === "out", { nopick: true }).map(({ f }) => f.dep).sort(); } finally { side.filter = saved; }
+    const deps = facet(k, key).map(({ f }) => f.dep).sort();
     if (!deps.length) return [];
     const round = key === "from" ? floorHour : ceilHour;
     const lo = round(deps[0]), hi = round(deps[deps.length - 1]);
     return HOURS.filter((h) => h >= lo && h <= hi);
   }
-  function refreshOptions() {
-    CHOICES.forEach(([id, key, all, choices]) => {
-      const ok = choices.filter(([v]) => v === state[key] || withFilters({ [key]: v }, anyFlight));
-      $(id).innerHTML = opts(all, ok);
-      $(id).value = state[key];
+  const keep = (cur) => (v) => v === cur || (Array.isArray(cur) && cur.includes(v));
+  // 篩選字卡裡目前分頁那一邊的選項
+  function sideChoices(k) {
+    const F = sides[k].filter, out = k === "out";
+    const has = (key, test) => { const rows = facet(k, key); return (v) => keep(F[key])(v) || rows.some((row) => test(row, v)); };
+    const monthHas = has("month", ({ l }, v) => l.month === v);
+    const wdHas = has("wd", ({ l }, v) => l.dow === v);
+    const stopsHas = has("stops", ({ f }, v) => stopsOk(v, f));
+    const statusHas = has("status", ({ f }, v) => statusOk(f.st, v));
+    const qRows = facet(k, "q");
+    const al = uniq(qRows.flatMap(({ f }) => f.al).concat(F.q.filter((v) => !/\d/.test(v)))).sort();
+    const nos = uniq(qRows.flatMap(({ f }) => f.nos).concat(F.q.filter((v) => /\d/.test(v)))).sort();
+    return {
+      month: uniq(LEGS.filter((l) => l.out === out).map((l) => l.month)).sort().filter(monthHas).map((m) => [m, monthLabel(m)]),
+      wd: WD.filter(wdHas).map((d) => [d, `星期${d}`]),
+      day: allDays.map(String).filter((n) => n === F.day || withSide(k, { day: n }, () => filteredFlights(out, { limit: 1 }).length))
+        .map((n) => [n, `${n} 天`]),
+      stops: [["direct", "直飛"], ["connect", "轉機"]].filter(([v]) => stopsHas(v)),
+      q: [al, nos],
+      from: hourChoices(k, "from"),
+      to: hourChoices(k, "to"),
+      status: STATUS_CHOICES.filter(([v]) => statusHas(v)),
+    };
+  }
+  function refreshPairs() {
+    const ok = PAIR_CHOICES.filter(([v]) => v === state.pair || withPair(v, anyFlight));
+    $("f-pair").innerHTML = opts("全部出發地 ⇄ 目的地", ok);
+    $("f-pair").value = state.pair;
+  }
+
+  // ---------- 篩選字卡 ----------
+  let fside = "out";  // 字卡目前的分頁
+  // 多選選單：按鈕顯示選了什麼，點開是勾選清單
+  function renderMulti(id, all, groups, cur, short) {
+    const el = $(id);
+    const prev = el.querySelector(".ms-list"), open = prev && !prev.hidden;
+    const list = groups.map(([title, items]) => items.length
+      ? (title ? `<div class="grp">${title}</div>` : "") + items.map(([v, t]) =>
+        `<label><input type="checkbox" value="${esc(v)}"${cur.includes(v) ? " checked" : ""}> ${esc(t)}</label>`).join("") : "").join("");
+    el.innerHTML = `<button type="button" class="ms-btn" aria-label="${all}"><span>${cur.length ? esc(short(cur)) : all}</span></button>
+      <div class="ms-list${open && prev.classList.contains("up") ? " up" : ""}"${open ? ` style="${prev.getAttribute("style")}"` : " hidden"}>${list || `<div class="grp">沒有選項</div>`}</div>`;
+  }
+  function refreshModal() {
+    if ($("fmodal").hidden) return;
+    const F = sides[fside].filter, C = sideChoices(fside);
+    $("ftabs").querySelectorAll("button").forEach((b) => {
+      const n = activeCount(sides[b.dataset.side].filter);
+      b.classList.toggle("on", b.dataset.side === fside);
+      b.textContent = (b.dataset.side === "out" ? "去程" : "回程") + (n ? ` (${n})` : "");
     });
-    ["out", "back"].forEach((k) => {
-      const sec = $(`side-${k}`);
-      [["from", ".sf-from", "最早"], ["to", ".sf-to", "最晚"]].forEach(([key, sel, all]) => {
-        const cur = sides[k].filter[key];
-        const hours = hourChoices(k, key);
-        if (cur && !hours.includes(cur)) hours.push(cur);
-        const el = sec.querySelector(sel);
-        el.innerHTML = opts(all, hours.sort().map((h) => [h, h]));
-        el.value = cur;
-      });
+    const sel = (id, all, choices, cur) => { $(id).innerHTML = opts(all, choices); $(id).value = cur; };
+    sel("fm-month", "全部出發月份", C.month, F.month);
+    sel("fm-day", "全部天數", C.day, F.day);
+    sel("fm-stops", "直飛和轉機", C.stops, F.stops);
+    sel("fm-status", "全部狀態", C.status, F.status);
+    [["from", "最早"], ["to", "最晚"]].forEach(([key, all]) => {
+      const hours = C[key];
+      if (F[key] && !hours.includes(F[key])) hours.push(F[key]);
+      sel(`fm-${key}`, all, hours.sort().map((h) => [h, h]), F[key]);
     });
+    if ($("fm-price").value !== F.price) $("fm-price").value = F.price;
+    const wd = WD.filter((d) => F.wd.includes(d));
+    renderMulti("fm-wd", "全部星期", [["", C.wd]], wd, () => `星期${wd.join("、")}`);
+    renderMulti("fm-q", "全部航班和航空公司", [["航空公司", C.q[0].map((v) => [v, v])], ["航班", C.q[1].map((v) => [v, v])]],
+      F.q, (q) => q.join("、"));
+    $("fm-count").textContent = `符合 ${num(filteredFlights(fside === "out").length)} 班`;
+  }
+  // 一邊的篩選改了：兩邊都要重算（另一邊只列配得到的航班）
+  function sideChanged() {
+    sides.out.shown = PAGE;
+    sides.back.shown = PAGE;
+    saveSides();
+    refreshPairs();
+    refreshModal();
+    renderSides();
+    renderChart();
+  }
+  function setField(key, v) {
+    sides[fside].filter = { ...sides[fside].filter, [key]: v };
+    sideChanged();
+  }
+  [["fm-month", "month"], ["fm-day", "day"], ["fm-stops", "stops"], ["fm-status", "status"], ["fm-from", "from"], ["fm-to", "to"]]
+    .forEach(([id, key]) => $(id).addEventListener("change", (e) => setField(key, e.target.value)));
+  $("fm-price").addEventListener("input", (e) => setField("price", e.target.value));
+  [["fm-wd", "wd"], ["fm-q", "q"]].forEach(([id, key]) => {
+    const el = $(id);
+    el.addEventListener("click", (e) => {
+      if (!e.target.closest(".ms-btn")) return;
+      const list = el.querySelector(".ms-list");
+      document.querySelectorAll(".ms-list").forEach((x) => { if (x !== list) x.hidden = true; });
+      list.hidden = !list.hidden;
+      if (list.hidden) return;
+      // 清單放得下就往下開，下面太擠就往上開，高度不超出畫面
+      const b = el.getBoundingClientRect(), below = innerHeight - b.bottom - 16, above = b.top - 16;
+      const up = below < 200 && above > below;
+      list.classList.toggle("up", up);
+      list.style.maxHeight = `${Math.min(300, up ? above : below)}px`;
+    });
+    el.addEventListener("change", () => setField(key, [...el.querySelectorAll("input:checked")].map((x) => x.value)));
+  });
+  // 點清單外面收起清單
+  $("fmodal").addEventListener("click", (e) => {
+    if (!e.target.closest(".ms")) document.querySelectorAll(".ms-list").forEach((x) => { x.hidden = true; });
+    if (e.target === $("fmodal")) closeFilters();
+  });
+  $("ftabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { fside = b.dataset.side; refreshModal(); }));
+  $("fm-reset").addEventListener("click", () => resetSide(fside));
+  $("fm-close").addEventListener("click", () => closeFilters());
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("fmodal").hidden) closeFilters(); });
+  function openFilters(k) {
+    fside = k;
+    $("fmodal").hidden = false;
+    document.body.classList.add("modal-open");
+    refreshModal();
+  }
+  function closeFilters() {
+    $("fmodal").hidden = true;
+    document.body.classList.remove("modal-open");
+    document.querySelectorAll(".ms-list").forEach((x) => { x.hidden = true; });
+  }
+  function resetSide(k) {
+    sides[k].filter = { ...SIDE0, wd: [], q: [] };
+    sideChanged();
   }
 
   const FLIGHT_COLS = [["pair", "出發-抵達"], ["date", "日期"], ["price", "價格"], ["flight", "航班"]];
@@ -586,11 +717,15 @@ td.price { line-height: 1.3; }
     const rest = list.length - rows.length;
     const sec = $(out ? "side-out" : "side-back");
     sec.querySelector(".count").textContent = `${num(list.length)} 班`;
+    // 點選的那一邊只列點選的航班，篩選暫時不作用：只留取消選擇
     sec.querySelector(".unpick").hidden = !mine;
-    // 點選的那一邊只列點選的航班，篩選暫時不作用
-    sec.querySelectorAll(".sf").forEach((x) => { x.disabled = mine; });
+    sec.querySelectorAll(".hctl").forEach((x) => { x.hidden = mine; });
+    const n = activeCount(side.filter);
+    sec.querySelector(".sf-open").textContent = n ? `篩選 (${n})` : "篩選";
+    sec.querySelector(".sf-open").classList.toggle("on", n > 0);
     // 點表格標題換成其他排序時，選單顯示「排序」
-    sec.querySelector(".sf-sort").value = side.sort.dir > 0 && ["date", "price"].includes(side.sort.key) ? side.sort.key : "";
+    const sv = `${side.sort.key}:${side.sort.dir}`;
+    sec.querySelector(".sf-sort").value = SORTS.some(([v]) => v === sv) ? sv : "";
     $("tabs").querySelector(`[data-view="${out ? "out" : "back"}"] small`).textContent = mine ? "已選" : `${num(list.length)} 班`;
     const el = sec.querySelector(".side-body");
     // 窄螢幕看不到點選的那一邊，所以在另一邊頂端列出點選的航班
@@ -619,7 +754,7 @@ td.price { line-height: 1.3; }
       renderSides();
       renderChart();
     }));
-    el.querySelector(".picked-sum .unpick")?.addEventListener("click", () => { picked = null; renderSides(); renderChart(); });
+    el.querySelector(".picked-sum .unpick")?.addEventListener("click", unpick);
     // 捲到列表底部附近就自動多列一頁；隱藏的那一邊不會觸發
     side.io?.disconnect();
     const more = el.querySelector(".more");
@@ -676,44 +811,36 @@ td.price { line-height: 1.3; }
   $("page-tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setPage(b.dataset.page)));
   setPage("flights");
 
-  // 兩邊的標題列：只建立一次
+  // 取消選擇：窄螢幕回到點選的那一邊
+  function unpick() {
+    if (!picked) return;
+    const out = picked.out;
+    picked = null;
+    setView(out);
+    renderSides();
+    renderChart();
+  }
+  // 兩邊的標題列：只建立一次。排序選單和表格標題的排序是同一個設定
+  const SORTS = [["date:1", "日期早→晚"], ["date:-1", "日期晚→早"], ["price:1", "金額低→高"], ["price:-1", "金額高→低"]];
   ["out", "back"].forEach((k) => {
     const sec = $(`side-${k}`);
     const label = k === "out" ? "去程" : "回程";
     sec.innerHTML = `<h3><span class="lbl">${label}</span> <small class="count"></small>
-        <input type="search" class="sf sf-q" placeholder="${narrow() ? "航班" : "航班或航空公司"}" aria-label="${label}航班或航空公司">
-        <select class="sf sf-sort" aria-label="${label}排序"><option value="" hidden>排序</option>
-          <option value="date">日期早→晚</option><option value="price">金額低→高</option></select>
-        <span class="sf-time">起飛
-          <select class="sf sf-from" aria-label="${label}最早起飛時間">${opts("最早", HOURS.map((h) => [h, h]))}</select>～<select class="sf sf-to" aria-label="${label}最晚起飛時間">${opts("最晚", HOURS.map((h) => [h, h]))}</select>
-        </span>
+        <select class="sf-sort hctl" aria-label="${label}排序"><option value="" hidden>排序</option>
+          ${SORTS.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select>
+        <button type="button" class="sf-open hctl">篩選</button>
+        <button type="button" class="sf-reset hctl">清除篩選</button>
         <button type="button" class="unpick" hidden>取消選擇</button></h3>
       <div class="side-body"></div>`;
-    const q = sec.querySelector(".sf-q"), from = sec.querySelector(".sf-from"), to = sec.querySelector(".sf-to");
-    const change = () => {
-      sides[k].filter = { q: q.value, from: from.value, to: to.value };
-      sides[k].shown = PAGE;
-      store.set("side-filters", { out: sides.out.filter, back: sides.back.filter });
-      refreshOptions();
-      renderSides();
-    };
-    // 排序選單和表格標題的排序是同一個設定；選單只有兩種遞增排序
     sec.querySelector(".sf-sort").addEventListener("change", (e) => {
-      sides[k].sort = { key: e.target.value, dir: 1 };
+      const [key, dir] = e.target.value.split(":");
+      sides[k].sort = { key, dir: +dir };
       sides[k].shown = PAGE;
       renderSides();
     });
-    q.addEventListener("input", change);
-    from.addEventListener("change", change);
-    to.addEventListener("change", change);
-    sec.querySelector(".unpick").addEventListener("click", () => { picked = null; renderSides(); renderChart(); });
-  });
-  const syncSideInputs = () => ["out", "back"].forEach((k) => {
-    const sec = $(`side-${k}`), f = sides[k].filter;
-    [["q", ".sf-q"], ["from", ".sf-from"], ["to", ".sf-to"]].forEach(([key, sel]) => {
-      const el = sec.querySelector(sel);
-      if (el.value !== f[key]) el.value = f[key];
-    });
+    sec.querySelector(".sf-open").addEventListener("click", () => openFilters(k));
+    sec.querySelector(".sf-reset").addEventListener("click", () => resetSide(k));
+    sec.querySelector(".unpick").addEventListener("click", unpick);
   });
 
   // 有點選時：另一邊的一班和配得到的點選航班的來回總額（並列最低價時總額相同，天數可能不同）
@@ -795,14 +922,14 @@ td.price { line-height: 1.3; }
   // ---------- 每週最低單程價格：一組機場，去程、回程各一張折線圖 ----------
   let chartIdx = 0;  // 沒有篩選機場時，左右按鈕切換的那一組
   const chartPair = () => state.pair || pairs[chartIdx] || "";
-  // 某個方向、某一週的最低價航班（跟著直飛／轉機篩選）；並列最低價的都算
-  function weekLows(o, d, w) {
+  // 某個方向、某一週的最低價航班（跟著那一邊的直飛／轉機篩選）；並列最低價的都算
+  function weekLows(o, d, w, stops) {
     let min = Infinity, items = [];
     const seen = new Set();
     LEGS.forEach((l) => {
       if (l.o !== o || l.d !== d || l.week !== w) return;
       l.flights.forEach((f) => {
-        if (!stopsOk(f) || f.price > min) return;
+        if (!stopsOk(stops, f) || f.price > min) return;
         if (f.price < min) { min = f.price; items = []; seen.clear(); }
         const key = rowKey(l, f);
         if (!seen.has(key)) { seen.add(key); items.push({ l, f }); }
@@ -820,7 +947,7 @@ td.price { line-height: 1.3; }
     const series = [
       { key: "out", out: true, name: `去程 ${tw}→${jp}`, o: tw, d: jp },
       { key: "back", out: false, name: `回程 ${jp}→${tw}`, o: jp, d: tw },
-    ].map((x) => ({ ...x, lows: Object.fromEntries(weeks.map((w) => [w, weekLows(x.o, x.d, w)]).filter(([, v]) => v)) }));
+    ].map((x) => ({ ...x, lows: Object.fromEntries(weeks.map((w) => [w, weekLows(x.o, x.d, w, fOf(x.out).stops)]).filter(([, v]) => v)) }));
     const values = series.flatMap((x) => Object.values(x.lows).map((v) => v.price));
     if (!values.length) return empty("這組機場沒有符合的航班");
     $("chart-back").hidden = false;
@@ -903,14 +1030,9 @@ td.price { line-height: 1.3; }
   // ---------- 更新 ----------
   function update() {
     if (state.pair && !pairs.includes(state.pair)) state.pair = "";
-    if (state.day && !allDays.includes(+state.day)) state.day = "";
-    if (state.month && !months.includes(state.month)) state.month = "";
     store.set("filters", state);
-    refreshOptions();
+    refreshPairs();
     renderRange();
-    FIELDS.forEach(([id, key]) => { if ($(id).value !== state[key]) $(id).value = state[key]; });
-    store.set("side-filters", { out: sides.out.filter, back: sides.back.filter });
-    syncSideInputs();
     sides.out.shown = PAGE;
     sides.back.shown = PAGE;
     renderSides();  // 點選的航班保持選取
