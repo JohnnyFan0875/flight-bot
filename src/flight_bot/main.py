@@ -2,6 +2,7 @@
 
   flight-bot run --mode daily [--dry-run | --plan-only]
   flight-bot run --mode weekly [--dry-run]
+  flight-bot rerender [--dry-run]
   flight-bot search TPE NRT 2027-03-14 [--return 2027-03-19] [--max-stops 0]
   flight-bot calendar TPE NRT 2026-12-01 2027-05-01 [--max-stops 0] [--trip-length 5]
   flight-bot test-webhook
@@ -164,6 +165,51 @@ def publish_report(cfg, daily, runner, backend, today, run_id, dry_run) -> None:
     log.info("報告已產生：%s（歷史 %d 天）", (SITE_DIR / "index.html").resolve(), len(dates))
 
 
+# ---------- rerender ----------
+
+
+def cmd_rerender(args) -> int:
+    from .storage import backend as backends
+
+    cfg = load_config(args.config)
+    return 0 if rerender_reports(backends.from_env(), cfg.report.keep_days, args.dry_run) else 1
+
+
+def rerender_reports(backend, keep_days: int, dry_run: bool = False) -> list[str]:
+    """用目前的範本重新產生 R2 上最近的每日報告並寫到 site/，不重新查詢；回傳重新產生的日期。
+    格式太舊、取不出資料的報告原樣保留。"""
+    from .report import extract_data, render
+
+    keys = backend.list(REPORT_PREFIX)
+    dates = sorted(k.removeprefix(REPORT_PREFIX).removesuffix(".html") for k in keys if k.endswith(".html"))
+    dates = dates[-keep_days:]
+    (SITE_DIR / "d").mkdir(parents=True, exist_ok=True)
+    done, latest = [], None
+    for i, day in enumerate(dates):
+        old = backend.get(f"{REPORT_PREFIX}{day}.html")
+        data = extract_data(old.decode("utf-8")) if old else None
+        if data is None:
+            log.warning("%s 的報告格式太舊，保留原檔", day)
+            if old:
+                (SITE_DIR / "d" / f"{day}.html").write_bytes(old)
+            continue
+        data["history"] = dates[: i + 1]
+        archive = render(data, base="../")
+        if not dry_run:
+            backend.put(f"{REPORT_PREFIX}{day}.html", archive.encode(), "text/html; charset=utf-8")
+        (SITE_DIR / "d" / f"{day}.html").write_text(archive, encoding="utf-8")
+        done.append(day)
+        latest = data
+    if latest is None:
+        log.error("沒有可以重新產生的報告")
+        return []
+    (SITE_DIR / ".nojekyll").write_text("")
+    (SITE_DIR / "index.html").write_text(render(latest), encoding="utf-8")
+    (SITE_DIR / "dates.json").write_text(json.dumps(dates), encoding="utf-8")
+    log.info("已重新產生 %d 份報告（%s ~ %s）%s", len(done), done[0], done[-1], "，dry-run 不上傳" if dry_run else "")
+    return done
+
+
 def run_weekly(cfg, state, discord, backend, today, dry_run) -> None:
     from .notify import weekly
 
@@ -255,6 +301,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--plan-only", action="store_true", help="只印出今天的查詢清單和數量")
     p.add_argument("--today", help="覆寫今天的日期（測試用，YYYY-MM-DD）")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("rerender", help="用目前的網頁範本重新產生最近的每日報告（不重新查詢）")
+    p.add_argument("--config", default="config.yaml")
+    p.add_argument("--dry-run", action="store_true", help="只寫到 site/，不上傳 R2")
+    p.set_defaults(func=cmd_rerender)
 
     p = sub.add_parser("search", help="逐日查詢一個日期")
     p.add_argument("origin")

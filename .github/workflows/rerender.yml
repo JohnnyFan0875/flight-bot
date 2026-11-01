@@ -1,0 +1,49 @@
+name: rerender
+
+# 用目前的網頁範本重新產生最近的每日報告並部署，不重新查詢、不發 Discord
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/flight_bot/report_template.html
+      - src/flight_bot/report.py
+  workflow_dispatch:
+
+concurrency:
+  group: flight-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --no-dev
+      - name: flight-bot rerender
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET || 'flight-bot' }}
+        run: uv run flight-bot rerender
+      - name: upload report
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy-report:
+    needs: run
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

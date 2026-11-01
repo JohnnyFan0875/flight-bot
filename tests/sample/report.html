@@ -151,7 +151,10 @@ th .arrow { color: var(--accent); }
   .split h3 { flex-wrap: nowrap; }
   .split h3 .lbl, .split h3 .count { display: none; }
   .split h3 input.sf-q { flex: 1 1 0; min-width: 0; width: auto; }
-  .split h3 .sf-time { flex-shrink: 0; }
+  .split h3 .sf-time, .split h3 .sf-sort { flex-shrink: 0; }
+  /* 排序和起飛時間都要擠在同一行：縮小間距和選單 */
+  .split h3 { gap: 6px; }
+  .split h3 select { padding: 3px 4px; }
 }
 
 /* 電腦：表格 */
@@ -579,6 +582,8 @@ td.price { line-height: 1.3; }
     sec.querySelector(".unpick").hidden = !mine;
     // 點選的那一邊只列點選的航班，篩選暫時不作用
     sec.querySelectorAll(".sf").forEach((x) => { x.disabled = mine; });
+    // 點表格標題換成其他排序時，選單顯示「排序」
+    sec.querySelector(".sf-sort").value = side.sort.dir > 0 && ["date", "price"].includes(side.sort.key) ? side.sort.key : "";
     $("tabs").querySelector(`[data-view="${out ? "out" : "back"}"] small`).textContent = mine ? "已選" : `${num(list.length)} 班`;
     const el = sec.querySelector(".side-body");
     // 窄螢幕看不到點選的那一邊，所以在另一邊頂端列出點選的航班
@@ -664,7 +669,9 @@ td.price { line-height: 1.3; }
     const sec = $(`side-${k}`);
     const label = k === "out" ? "去程" : "回程";
     sec.innerHTML = `<h3><span class="lbl">${label}</span> <small class="count"></small>
-        <input type="search" class="sf sf-q" placeholder="航班或航空公司" aria-label="${label}航班名稱">
+        <input type="search" class="sf sf-q" placeholder="${narrow() ? "航班" : "航班或航空公司"}" aria-label="${label}航班或航空公司">
+        <select class="sf sf-sort" aria-label="${label}排序"><option value="" hidden>排序</option>
+          <option value="date">日期早→晚</option><option value="price">金額低→高</option></select>
         <span class="sf-time">起飛
           <select class="sf sf-from" aria-label="${label}最早起飛時間">${opts("最早", HOURS.map((h) => [h, h]))}</select>～<select class="sf sf-to" aria-label="${label}最晚起飛時間">${opts("最晚", HOURS.map((h) => [h, h]))}</select>
         </span>
@@ -678,6 +685,12 @@ td.price { line-height: 1.3; }
       refreshOptions();
       renderSides();
     };
+    // 排序選單和表格標題的排序是同一個設定；選單只有兩種遞增排序
+    sec.querySelector(".sf-sort").addEventListener("change", (e) => {
+      sides[k].sort = { key: e.target.value, dir: 1 };
+      sides[k].shown = PAGE;
+      renderSides();
+    });
     q.addEventListener("input", change);
     from.addEventListener("change", change);
     to.addEventListener("change", change);

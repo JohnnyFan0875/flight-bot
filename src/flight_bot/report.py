@@ -87,6 +87,20 @@ def build_data(cfg: Config, report, stats: Stats, run_id: str, run_date: date,
     }
 
 
+DATA_TAG = '<script id="data" type="application/json">'
+DATA_KEYS = {"run", "airports", "routes", "legs"}  # 目前的範本需要的欄位
+
+
+def extract_data(html: str) -> dict | None:
+    """從產生好的報告取出資料（render 的反向），換了範本後重新產生舊報告用；格式太舊的回傳 None。"""
+    start = html.find(DATA_TAG)
+    if start < 0:
+        return None
+    start += len(DATA_TAG)
+    data = json.loads(html[start:html.index("</script>", start)])
+    return data if DATA_KEYS <= data.keys() else None
+
+
 def render(data: dict, base: str = "") -> str:
     """base：歷史報告連結的前綴；首頁是 ""，歷史頁面（在 d/ 底下）是 "../"。"""
     payload = json.dumps({**data, "base": base}, ensure_ascii=False, separators=(",", ":"))

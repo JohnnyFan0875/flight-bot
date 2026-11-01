@@ -45,6 +45,7 @@ uv run flight-bot run --mode daily --plan-only    # 只印出今天要查什麼
 uv run flight-bot run --mode daily --dry-run      # 實際查詢，但只印出 Discord 訊息、不上傳
 uv run flight-bot run --mode daily                # 正式執行
 uv run flight-bot run --mode weekly --dry-run     # 每週摘要，圖片存到 .local-storage/reports/
+uv run flight-bot rerender --dry-run              # 用目前的範本重新產生最近的報告到 site/，不上傳
 
 uv run flight-bot search TPE NRT 2026-12-10                  # 查一個日期的航班
 uv run flight-bot calendar TPE NRT 2026-12-01 2027-03-01     # 用日期 API 查一段日期（實驗性，見下方說明）
@@ -61,6 +62,7 @@ uv run pytest
 
 - 每天的報告存一份在 R2 的 `reports/daily/`，網站保留最近 `report.keep_days` 天，可以從標題旁的日期選單切換
 - 本機執行時，報告會產生在 `site/index.html`，直接用瀏覽器開啟即可
+- 報告是當天的資料套上 `report_template.html` 產生的靜態網頁。範本或 `report.py` 推到 main 時，`rerender` workflow 會取出最近報告裡的資料，用新範本重新產生並部署（不重新查詢、不發 Discord）；也可以在 Actions 頁面手動執行。10/25 以前的報告格式太舊，會原樣保留
 - 報告網頁是公開的（內容只有票價資訊）
 
 ## GitHub Secrets
