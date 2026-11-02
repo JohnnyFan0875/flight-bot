@@ -218,7 +218,7 @@ td.price { font-size: 17px; font-weight: 700; white-space: nowrap; }
 .chart .out circle.dot { fill: var(--series-out); }
 .chart .back path { stroke: var(--series-back); }
 .chart .back circle.dot { fill: var(--series-back); }
-.grid2 > *, .cards > * { min-width: 0; }  /* 避免寬表格把 grid 撐出畫面 */
+.grid2 > *, .cards > *, .charts > *, .sheet > * { min-width: 0; }  /* 避免寬表格、多選選單的長文字把 grid 撐出畫面 */
 main { overflow-x: clip; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .empty { padding: 24px; text-align: center; color: var(--muted); background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
