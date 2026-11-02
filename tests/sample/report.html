@@ -14,8 +14,6 @@
   --google: #a15c00; --google-soft: #fff1d6;
   --cap: #7a3fc4; --cap-soft: #f1e8fc;
   --down: #12805c; --up: #c4320a; --warn-bg: #fff4e5; --warn-line: #f5c27a;
-  --series-out: #2a78d6; --series-back: #eb6834;
-  --band-a: #eef3fc; --band-b: #fbf1e9;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -26,8 +24,6 @@
     --google: #f2b84b; --google-soft: #3a2e14;
     --cap: #c39bff; --cap-soft: #2d2140;
     --down: #4fd1a1; --up: #ff8a65; --warn-bg: #3a2e14; --warn-line: #7a5b1f;
-    --series-out: #3987e5; --series-back: #d95926;
-    --band-a: #1c2433; --band-b: #2a221c;
   }
 }
 * { box-sizing: border-box; }
@@ -159,20 +155,17 @@ header.top .wrap > div { flex: 1; }
   .f-row1 #f-pair { flex: 1; min-width: 0; }
   .f-range { flex-shrink: 0; white-space: nowrap; }
 }
-/* 窄螢幕：上方分頁切換航班和折線圖；航班的去程、回程也分頁切換（按鈕或左右滑動），總額直接寫在另一邊的卡片上 */
+/* 窄螢幕：航班的去程、回程分頁切換（按鈕或左右滑動），總額直接寫在另一邊的卡片上 */
 .seg { display: flex; flex-basis: 100%; gap: 6px; }
 .seg button { flex: 1; padding: 6px 8px; font-weight: 600; }
 .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .seg button small { font-weight: normal; opacity: 0.85; }
-.page-tabs { margin-top: 12px; }
 .picked-sum { display: flex; align-items: center; gap: 8px; background: var(--accent-soft); border: 1px solid var(--accent);
   border-radius: 12px; padding: 8px 12px; margin-bottom: 10px; font-size: 14px; }
 .picked-sum .unpick { margin-left: auto; font-size: 13px; padding: 2px 10px; flex-shrink: 0; white-space: nowrap; }
 .card .pair-total { margin-top: 4px; font-weight: 600; text-align: right; }
 @media (max-width: 1099px) {
   .split[data-view="out"] #side-back, .split[data-view="back"] #side-out, #side-total { display: none; }
-  main[data-page="flights"] #page-chart, main[data-page="chart"] #split, main[data-page="chart"] #tabs { display: none; }
-  main[data-page="chart"] .chart-head { margin-top: 0; }
   /* 分頁已經寫了去程／回程和班數，標題列只留排序、篩選、清除篩選 */
   .split h3 { flex-wrap: nowrap; }
   .split h3 .lbl, .split h3 .count { display: none; }
@@ -192,33 +185,7 @@ td.price { font-size: 17px; font-weight: 700; white-space: nowrap; }
 }
 
 .scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
-/* 每週最低單程價格：折線圖 */
-.chart-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 28px 0 10px; }
-.chart-head h2 { margin: 0; }
-.chart-head .nav { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.chart-head .nav button { width: 32px; height: 32px; padding: 0; border-radius: 8px; font-size: 16px; line-height: 1; }
-.chart-head .nav .which { font-weight: 600; min-width: 9em; text-align: center; }
-.charts { display: grid; gap: 10px; }
-.chart { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 4px; }
-.chart .title { font-size: 13px; color: var(--muted); }
-.chart .title i { display: inline-block; width: 18px; height: 2px; border-radius: 1px; vertical-align: middle; margin-right: 6px; }
-.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-.chart .grid { stroke: var(--line); stroke-width: 1; }
-/* 同一個月份的週同一個底色，相鄰月份交替 */
-.chart .band0 { fill: var(--band-a); }
-.chart .band1 { fill: var(--band-b); }
-.chart .band-label { fill: var(--muted); font-size: 12px; font-weight: 600; }
-.chart .tick { fill: var(--muted); font-size: 12px; }
-.chart .series path { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.chart .series circle.dot { stroke: var(--panel); stroke-width: 2; }
-.chart .val { fill: var(--text); font-size: 12px; font-weight: 600; }
-.chart .hit { fill: transparent; cursor: pointer; }
-.chart .hit:hover + circle.dot, .chart circle.dot.on { r: 6; }
-.chart .out path { stroke: var(--series-out); }
-.chart .out circle.dot { fill: var(--series-out); }
-.chart .back path { stroke: var(--series-back); }
-.chart .back circle.dot { fill: var(--series-back); }
-.grid2 > *, .cards > *, .charts > *, .sheet > * { min-width: 0; }  /* 避免寬表格、多選選單的長文字把 grid 撐出畫面 */
+.grid2 > *, .cards > *, .sheet > * { min-width: 0; }  /* 避免寬表格、多選選單的長文字把 grid 撐出畫面 */
 main { overflow-x: clip; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .empty { padding: 24px; text-align: center; color: var(--muted); background: var(--panel); border: 1px dashed var(--line); border-radius: 12px; }
@@ -241,12 +208,8 @@ td.price { line-height: 1.3; }
   </div>
 </header>
 
-<main class="wrap" id="main" data-page="flights">
+<main class="wrap" id="main">
   <div class="notes" id="notes"></div>
-  <div class="seg page-tabs" id="page-tabs">
-    <button type="button" data-page="flights">去程・回程</button>
-    <button type="button" data-page="chart">每週最低單程價格</button>
-  </div>
   <div class="filters">
     <div class="f-row1">
       <select id="f-pair" aria-label="出發地與目的地"></select>
@@ -263,21 +226,6 @@ td.price { line-height: 1.3; }
     <section id="side-back"></section>
     <section id="side-total" hidden></section>
     <svg class="links" id="links" aria-hidden="true"></svg>
-  </div>
-
-  <div id="page-chart">
-    <div class="chart-head">
-      <h2>每週最低單程價格</h2>
-      <div class="nav" id="chart-nav">
-        <button type="button" id="chart-prev" aria-label="上一組機場">‹</button>
-        <span class="which" id="chart-which"></span>
-        <button type="button" id="chart-next" aria-label="下一組機場">›</button>
-      </div>
-    </div>
-    <div class="charts">
-      <div class="chart" id="chart-out"></div>
-      <div class="chart" id="chart-back"></div>
-    </div>
   </div>
 
 </main>
@@ -332,13 +280,10 @@ td.price { line-height: 1.3; }
   const monthLabel = (ym) => `${ym.slice(0, 4)} 年 ${+ym.slice(5)} 月`;
   const place = (code) => D.airports[code] || code;
   const addDays = (iso, n) => { const t = new Date(iso + "T00:00:00Z"); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
-  // 那一週的星期一
-  const weekOf = (iso) => addDays(iso, -((new Date(iso + "T00:00:00Z").getUTCDay() + 6) % 7));
   const R = D.routes;
   const LEGS = D.legs;
   LEGS.forEach((l) => {
     l.month = l.date.slice(0, 7);
-    l.week = weekOf(l.date);
     l.tw = l.out ? l.o : l.d;  // 台灣那一端
     l.jp = l.out ? l.d : l.o;  // 日本那一端
   });
@@ -403,12 +348,6 @@ td.price { line-height: 1.3; }
   // ---------- 篩選選項 ----------
   const uniq = (xs) => [...new Set(xs)];
   const opts = (all, pairs) => `<option value="">${all}</option>` + pairs.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
-  // 折線圖的每一週：從最早到最晚連續列出，沒有資料的週斷開
-  const weeks = [];
-  if (LEGS.length) {
-    const last = LEGS.map((l) => l.week).sort().pop();
-    for (let w = LEGS.map((l) => l.week).sort()[0]; w <= last; w = addDays(w, 7)) weeks.push(w);
-  }
   // 出發地 ⇄ 目的地：各航線所有可能的組合，值是「台灣機場|日本機場」
   const pairs = uniq(R.flatMap((x) => x.origins.flatMap((o) => x.dests.map((d) => `${o}|${d}`))));
   const allDays = uniq(R.flatMap((x) => x.days)).sort((a, b) => a - b);
@@ -481,7 +420,7 @@ td.price { line-height: 1.3; }
   };
   const rowKey = (l, f) => `${l.o}|${l.d}|${l.date}|${f.nos.join(" ")}|${f.dep}`;
   // 點選的航班：{ out, items: [{ l, f }] }，都在同一邊；另一邊的表格只列出能和它們配對的航班。
-  // 點表格的一列選一班；點折線圖的點選那一週所有並列最低價的航班。
+  // 點表格的一列選一班。
   let picked = null;
   const pickedKeys = () => new Set(picked.items.map(({ l, f }) => rowKey(l, f)));
   // 和點選的航班配得到的另一程：{ "出發|抵達|日期": [點選航班的索引, ...] }，依各自的航線、另一邊選的天數、機場篩選算出
@@ -630,7 +569,6 @@ td.price { line-height: 1.3; }
     refreshPairs();
     refreshModal();
     renderSides();
-    renderChart();
   }
   function setField(key, v) {
     sides[fside].filter = { ...sides[fside].filter, [key]: v };
@@ -743,7 +681,7 @@ td.price { line-height: 1.3; }
       side.shown = PAGE;
       renderSides();
     }));
-    // 點一下選取、再點一次取消（選了多班時，點其中一班就只留那一班）；另一邊重新篩選
+    // 點一下選取、再點一次取消；另一邊重新篩選
     el.querySelectorAll("[data-i]").forEach((row) => row.addEventListener("click", (e) => {
       if (e.target.closest("a")) return;
       const { l, f } = rows[+row.dataset.i];
@@ -752,8 +690,7 @@ td.price { line-height: 1.3; }
       sides[out ? "back" : "out"].shown = PAGE;
       if (picked) setView(!out);
       renderSides();
-      renderChart();
-    }));
+      }));
     el.querySelector(".picked-sum .unpick")?.addEventListener("click", unpick);
     // 捲到列表底部附近就自動多列一頁；隱藏的那一邊不會觸發
     side.io?.disconnect();
@@ -802,15 +739,6 @@ td.price { line-height: 1.3; }
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) setView(dx > 0);  // 往右滑回到去程
   }, { passive: true });
   setView(true, false);
-  // 窄螢幕上方的分頁：航班或每週最低單程價格
-  function setPage(p) {
-    $("main").dataset.page = p;
-    $("page-tabs").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.page === p));
-    if (p === "chart") renderChart();  // 隱藏時量不到寬度，切過來再畫一次
-  }
-  $("page-tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => setPage(b.dataset.page)));
-  setPage("flights");
-
   // 取消選擇：窄螢幕回到點選的那一邊
   function unpick() {
     if (!picked) return;
@@ -818,7 +746,6 @@ td.price { line-height: 1.3; }
     picked = null;
     setView(out);
     renderSides();
-    renderChart();
   }
   // 兩邊的標題列：只建立一次。排序選單和表格標題的排序是同一個設定
   const SORTS = [["date:1", "日期早→晚"], ["date:-1", "日期晚→早"], ["price:1", "金額低→高"], ["price:-1", "金額高→低"]];
@@ -843,7 +770,7 @@ td.price { line-height: 1.3; }
     sec.querySelector(".unpick").addEventListener("click", unpick);
   });
 
-  // 有點選時：另一邊的一班和配得到的點選航班的來回總額（並列最低價時總額相同，天數可能不同）
+  // 有點選時：另一邊的一班和配得到的點選航班的來回總額
   const between = (a, b) => Math.round(Math.abs(Date.parse(b) - Date.parse(a)) / 864e5) + 1;  // 含去程當天
   function pairInfo({ l, f, withs }) {
     const mates = withs.map((p) => picked.items[p]);
@@ -919,114 +846,6 @@ td.price { line-height: 1.3; }
   }
   addEventListener("resize", drawLinks);
 
-  // ---------- 每週最低單程價格：一組機場，去程、回程各一張折線圖 ----------
-  let chartIdx = 0;  // 沒有篩選機場時，左右按鈕切換的那一組
-  const chartPair = () => state.pair || pairs[chartIdx] || "";
-  // 某個方向、某一週的最低價航班（跟著那一邊的直飛／轉機篩選）；並列最低價的都算
-  function weekLows(o, d, w, stops) {
-    let min = Infinity, items = [];
-    const seen = new Set();
-    LEGS.forEach((l) => {
-      if (l.o !== o || l.d !== d || l.week !== w) return;
-      l.flights.forEach((f) => {
-        if (!stopsOk(stops, f) || f.price > min) return;
-        if (f.price < min) { min = f.price; items = []; seen.clear(); }
-        const key = rowKey(l, f);
-        if (!seen.has(key)) { seen.add(key); items.push({ l, f }); }
-      });
-    });
-    return items.length ? { price: min, items } : null;
-  }
-  function renderChart() {
-    $("chart-nav").hidden = !!state.pair || pairs.length < 2;
-    const pair = chartPair();
-    const empty = (msg) => { $("chart-nav").hidden = true; $("chart-out").innerHTML = `<div class="muted">${msg}</div>`; $("chart-back").innerHTML = ""; $("chart-back").hidden = true; };
-    if (!pair || !weeks.length) return empty("還沒有資料");
-    const [tw, jp] = pair.split("|");
-    $("chart-which").textContent = `${tw} ⇄ ${jp}`;
-    const series = [
-      { key: "out", out: true, name: `去程 ${tw}→${jp}`, o: tw, d: jp },
-      { key: "back", out: false, name: `回程 ${jp}→${tw}`, o: jp, d: tw },
-    ].map((x) => ({ ...x, lows: Object.fromEntries(weeks.map((w) => [w, weekLows(x.o, x.d, w, fOf(x.out).stops)]).filter(([, v]) => v)) }));
-    const values = series.flatMap((x) => Object.values(x.lows).map((v) => v.price));
-    if (!values.length) return empty("這組機場沒有符合的航班");
-    $("chart-back").hidden = false;
-
-    // 兩張圖用同一個價格刻度，上下才能直接比較
-    let lo = Math.min(...values), hi = Math.max(...values);
-    const step = Math.max(500, Math.ceil((hi - lo) / 3 / 500) * 500);
-    lo = Math.floor(lo / step) * step - step / 2;
-    hi = Math.ceil(hi / step) * step + step / 2;
-    const sel = picked ? pickedKeys() : new Set();
-    series.forEach((sr) => {
-      const el = $(`chart-${sr.key}`);
-      const W = Math.max(el.clientWidth - 28, 320), H = 170;
-      const pad = { l: 56, r: 24, t: 32, b: 26 };
-      const inset = 36;  // 第一週和最後一週離座標軸留空，標價才不會壓到刻度
-      const gap = weeks.length === 1 ? Infinity : (W - pad.l - pad.r - inset * 2) / (weeks.length - 1);
-      const x = (i) => pad.l + inset + (weeks.length === 1 ? (W - pad.l - pad.r - inset * 2) / 2 : i * gap);
-      // 太擠時日期刻度隔幾週標一個；標價只標這條線的最低價
-      const every = Math.ceil(44 / gap);
-      const allVals = gap >= 46;
-      const seriesMin = Math.min(...Object.values(sr.lows).map((v) => v.price));
-      const y = (v) => pad.t + (hi - v) / (hi - lo) * (H - pad.t - pad.b);
-      let svg = "";
-      // 月份底色：每週算在週四所在的月份，色塊從前後兩週的中點切開
-      const bands = [];
-      weeks.forEach((w, i) => {
-        const m = addDays(w, 3).slice(0, 7);
-        if (bands.length && bands[bands.length - 1].m === m) bands[bands.length - 1].last = i;
-        else bands.push({ m, first: i, last: i });
-      });
-      const half = weeks.length === 1 ? (W - pad.l - pad.r) / 2 : gap / 2;
-      bands.forEach((b, k) => {
-        const x1 = Math.max(pad.l, x(b.first) - half), x2 = Math.min(W - pad.r, x(b.last) + half);
-        svg += `<rect class="band${k % 2}" x="${x1}" y="${pad.t - 22}" width="${x2 - x1}" height="${H - pad.b - pad.t + 22}" rx="4"/>`
-          + `<text class="band-label" x="${x1 + 8}" y="${pad.t - 8}">${+b.m.slice(5)} 月</text>`;
-      });
-      for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
-        svg += `<line class="grid" x1="${pad.l}" x2="${W - pad.r}" y1="${y(v)}" y2="${y(v)}"/>`
-          + `<text class="tick" x="${pad.l - 8}" y="${y(v) + 4}" text-anchor="end">${num(v)}</text>`;
-      }
-      weeks.forEach((w, i) => {
-        if (i % every) return;
-        const year = i === 0 || w.slice(0, 4) !== weeks[i - every].slice(0, 4);
-        svg += `<text class="tick" x="${x(i)}" y="${H - 6}" text-anchor="middle">${md(w)}${year ? ` ${w.slice(0, 4)}` : ""}</text>`;
-      });
-      let d = "", prev = false, marks = "";
-      weeks.forEach((w, i) => {
-        const v = sr.lows[w];
-        if (!v) { prev = false; return; }  // 沒有資料的週斷開
-        d += `${prev ? "L" : "M"}${x(i)},${y(v.price)} `;
-        prev = true;
-        const on = picked && picked.out === sr.out && v.items.every(({ l, f }) => sel.has(rowKey(l, f)));
-        const dates = uniq(v.items.map(({ l }) => md(l.date))).join("、");
-        marks += `<g data-w="${w}"><title>${esc(sr.name)}　${md(w)}–${md(addDays(w, 6))} 當週　${money(v.price)}（${dates}，${v.items.length} 班）</title>`
-          + `<circle class="hit" cx="${x(i)}" cy="${y(v.price)}" r="14"/>`
-          + `<circle class="dot${on ? " on" : ""}" cx="${x(i)}" cy="${y(v.price)}" r="4.5"/>`
-          + (allVals || v.price === seriesMin ? `<text class="val" x="${x(i)}" y="${y(v.price) - 10}" text-anchor="middle">${num(v.price)}</text>` : "")
-          + `</g>`;
-      });
-      svg += `<g class="series ${sr.key}"><path d="${d}"/>${marks}</g>`;
-      el.innerHTML = `<div class="title"><i style="background:var(--series-${sr.key})"></i>${esc(sr.name)}</div>
-        <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(sr.name)} 每週最低單程價格">${svg}</svg>`;
-      // 點一個點：選取那一週所有並列最低價的航班，表格直接走點選的流程
-      el.querySelectorAll("g[data-w]").forEach((g) => g.addEventListener("click", () => {
-        picked = { out: sr.out, items: sr.lows[g.dataset.w].items };
-        sides.out.shown = PAGE;
-        sides.back.shown = PAGE;
-        setView(!sr.out, false);  // 下面會捲到篩選列
-        setPage("flights");
-        renderSides();
-        renderChart();
-        document.querySelector(".filters").scrollIntoView({ behavior: "smooth", block: "start" });
-      }));
-    });
-  }
-  $("chart-prev").addEventListener("click", () => { chartIdx = (chartIdx - 1 + pairs.length) % pairs.length; renderChart(); });
-  $("chart-next").addEventListener("click", () => { chartIdx = (chartIdx + 1) % pairs.length; renderChart(); });
-  addEventListener("resize", renderChart);
-
   // ---------- 更新 ----------
   function update() {
     if (state.pair && !pairs.includes(state.pair)) state.pair = "";
@@ -1036,7 +855,6 @@ td.price { line-height: 1.3; }
     sides.out.shown = PAGE;
     sides.back.shown = PAGE;
     renderSides();  // 點選的航班保持選取
-    renderChart();
   }
   update();
 })();
