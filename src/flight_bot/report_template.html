@@ -75,8 +75,9 @@ button { cursor: pointer; }
 .card :is(.row2, .row3) > :last-child { white-space: nowrap; }
 .nw { white-space: nowrap; }
 .more { margin-top: 12px; padding: 8px; text-align: center; }
-/* 出發地 ⇄ 目的地和查詢區間同一行 */
-.f-row1 { display: flex; gap: 12px; align-items: center; flex-basis: 100%; min-width: 0; }
+/* 出發地 ⇄ 目的地一行、查詢區間在下一行 */
+.f-row1 { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; flex-basis: 100%; min-width: 0; }
+.f-row1 #f-pair { max-width: 100%; }
 
 /* 單程航班：左去程、右回程 */
 .split { display: grid; gap: 16px; }
@@ -151,9 +152,8 @@ header.top .wrap > div { flex: 1; }
   .seg, .picked-sum, .pair-total { display: none !important; }
 }
 @media (max-width: 1099px) {
-  /* 出發地選單佔滿剩下的寬度（min-width: 0：不然選單的內容寬度會把這一行撐出框外），查詢區間固定一行 */
-  .f-row1 #f-pair { flex: 1; min-width: 0; }
-  .f-range { flex-shrink: 0; white-space: nowrap; }
+  /* 出發地選單佔滿整行 */
+  .f-row1 #f-pair { align-self: stretch; }
 }
 /* 窄螢幕：航班的去程、回程分頁切換（按鈕或左右滑動），總額直接寫在另一邊的卡片上 */
 .seg { display: flex; flex-basis: 100%; gap: 6px; }
