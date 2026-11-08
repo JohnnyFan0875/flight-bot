@@ -51,7 +51,7 @@ destinations:
     min_layover_min: null
 
   - name: 仙台
-    enabled: true
+    enabled: false
     origins: [TPE]
     dests: [SDJ]
     query_start: 2026-12-01
@@ -63,7 +63,7 @@ destinations:
     min_layover_min: null
 
   - name: 東京
-    enabled: true
+    enabled: false
     origins: [TPE]
     dests: [NRT, HND]
     query_start: 2026-12-01
@@ -90,8 +90,8 @@ destinations:
     enabled: true
     origins: [TPE]
     dests: [FUK]
-    query_start: 2027-03-01
-    query_end: 2027-05-31
+    query_start: 2027-05-01
+    query_end: 2027-10-31
     trip_days: [5]
     max_stops: 0
     max_total_duration_h: null
