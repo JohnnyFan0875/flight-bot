@@ -50,42 +50,6 @@ destinations:
     max_layover_h: null
     min_layover_min: null
 
-  - name: 仙台
-    enabled: false
-    origins: [TPE]
-    dests: [SDJ]
-    query_start: 2026-12-01
-    query_end: 2027-02-28
-    trip_days: [5, 6, 7]
-    max_stops: 0
-    max_total_duration_h: null
-    max_layover_h: null
-    min_layover_min: null
-
-  - name: 東京
-    enabled: false
-    origins: [TPE]
-    dests: [NRT, HND]
-    query_start: 2026-12-01
-    query_end: 2027-02-28
-    trip_days: [5, 6, 7]
-    max_stops: 0
-    max_total_duration_h: null
-    max_layover_h: null
-    min_layover_min: null
-
-  - name: 東京羽田（含松山）
-    enabled: true
-    origins: [TPE, TSA]
-    dests: [HND]
-    query_start: 2026-12-01
-    query_end: 2027-02-28
-    trip_days: [5, 6, 7]
-    max_stops: 0
-    max_total_duration_h: null
-    max_layover_h: null
-    min_layover_min: null
-
   - name: 福岡
     enabled: true
     origins: [TPE]
